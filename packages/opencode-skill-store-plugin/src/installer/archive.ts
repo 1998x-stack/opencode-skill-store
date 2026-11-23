@@ -65,7 +65,7 @@ export async function extractSkillArchive(filename: string, destination: string,
   const processEntry = async (entry: Entry) => {
     entries += 1
     if (entries > limits.maxEntries) throw new Error("ZIP contains too many entries")
-    if ((entry as Entry & { isEncrypted?: boolean }).isEncrypted) throw new Error("Encrypted ZIP entries are not supported")
+    if ((entry.generalPurposeBitFlag & 0x0001) !== 0) throw new Error("Encrypted ZIP entries are not supported")
 
     const mode = (entry.externalFileAttributes >>> 16) & 0xffff
     const fileType = mode & 0o170000
@@ -86,7 +86,7 @@ export async function extractSkillArchive(filename: string, destination: string,
     }
 
     if (entry.uncompressedSize > limits.maxUnpackedBytes) throw new Error("ZIP entry exceeds the unpacked size limit")
-    if (entry.compressedSize > 0 && entry.uncompressedSize / entry.compressedSize > limits.maxCompressionRatio)
+    if (entry.uncompressedSize > 0 && (entry.compressedSize === 0 || entry.uncompressedSize / entry.compressedSize > limits.maxCompressionRatio))
       throw new Error("ZIP entry exceeds the compression-ratio limit")
     totalBytes += entry.uncompressedSize
     if (totalBytes > limits.maxUnpackedBytes) throw new Error("ZIP exceeds the total unpacked size limit")
