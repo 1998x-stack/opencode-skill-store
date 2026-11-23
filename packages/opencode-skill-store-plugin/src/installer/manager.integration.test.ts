@@ -104,7 +104,7 @@ async function environment(options: EnvironmentOptions = {}) {
     storage: {
       get: async (key: string) => structuredClone(data.get(key)),
       set: async (key: string, value: unknown) => {
-        if (key === "installations" && current.failInstallationWrites) throw new Error("simulated installation storage failure")
+        if (key.endsWith(":installations") && current.failInstallationWrites) throw new Error("simulated installation storage failure")
         data.set(key, structuredClone(value))
       },
     },
