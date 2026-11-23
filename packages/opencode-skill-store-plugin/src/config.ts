@@ -49,6 +49,10 @@ function parseBaseUrl(value: string): URL {
 export function loadConfig(options: PluginOptions, location: Plugin.Context["location"]): StoreConfig {
   const baseUrl = text(options.storeBaseUrl) ?? process.env.SKILL_STORE_BASE_URL
   const apiKey = text(options.apiKey) ?? process.env.SKILL_STORE_API_KEY
+  // Prefixes may intentionally include a trailing separator (for example, "Bearer ").
+  const apiKeyPrefix = typeof options.apiKeyPrefix === "string"
+    ? options.apiKeyPrefix
+    : process.env.SKILL_STORE_API_KEY_PREFIX ?? "Bearer "
   const root = text(options.installRoot) ?? process.env.OPENCODE_SKILL_STORE_DIR ?? path.join(homedir(), ".opencode", "skill-store")
   const locationKey = createHash("sha256")
     .update(location.directory + "\u0000" + (location.workspaceID ?? ""))
@@ -59,7 +63,7 @@ export function loadConfig(options: PluginOptions, location: Plugin.Context["loc
     baseUrl: baseUrl ? parseBaseUrl(baseUrl) : undefined,
     apiKey,
     apiKeyHeader: text(options.apiKeyHeader) ?? process.env.SKILL_STORE_API_KEY_HEADER ?? "Authorization",
-    apiKeyPrefix: text(options.apiKeyPrefix) ?? process.env.SKILL_STORE_API_KEY_PREFIX ?? "Bearer ",
+    apiKeyPrefix,
     assetsPath: text(options.assetsPath) ?? process.env.SKILL_STORE_ASSETS_PATH ?? "/v1/asset-store/assets",
     assetDetailPath:
       text(options.assetDetailPath) ?? process.env.SKILL_STORE_ASSET_DETAIL_PATH ?? "/v1/asset-store/assets/{id}",
