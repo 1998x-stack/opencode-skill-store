@@ -89,7 +89,10 @@ async function environment() {
     location: { directory: path.join(root, "project") },
     storage: {
       get: async (key: string) => structuredClone(data.get(key)),
-      set: async (key: string, value: unknown) => { data.set(key, structuredClone(value)) },
+      set: async (key: string, value: unknown) => {
+        if (key === "installations" && current.failInstallationWrites) throw new Error("simulated installation storage failure")
+        data.set(key, structuredClone(value))
+      },
     },
     skill: {
       transform: async (callback: typeof transform) => {
@@ -98,9 +101,12 @@ async function environment() {
         return { dispose: async () => { runtime.length = 0 } }
       },
       reload: async () => {
-        if (current.failReload) throw new Error("simulated Runtime reload failure")
         runtime.length = 0
         transform(editor)
+        if (current.failReload) {
+          current.failReload = false
+          throw new Error("simulated Runtime reload failure after partial activation")
+        }
       },
       list: async () => ({ location: { directory: path.join(root, "project") }, data: runtime }),
     },
@@ -113,10 +119,11 @@ async function environment() {
     version: "1.0.0",
     invalidDigest: false,
     failReload: false,
+    failInstallationWrites: false,
   }
 
   const bytes = (version: string) => zip([
-    { name: "SKILL.md", content: ["---", "name: Proof Skill", "description: Checks supporting files", "---", "# Proof " + version, "Read references/proof.txt"].join("\n") },
+    { name: "SKILL.md", content: ["---", "name: Proof Skill", "---", "# Proof " + version, "Read references/proof.txt"].join("\n") },
     { name: "references/proof.txt", content: "runtime-proof-" + version },
   ])
 
@@ -170,7 +177,7 @@ async function environment() {
     throw new Error("Install operation did not reach a terminal state")
   }
   return {
-    manager, api, settle, runtime, current, config, root,
+    manager, api, settle, runtime, current, config, root, ctx, store,
     close: async () => { await manager.close(); await rm(root, { recursive: true, force: true }) },
   }
 }
@@ -187,6 +194,7 @@ describe("InstallManager end-to-end without live Store", () => {
       expect(s.runtime).toHaveLength(1)
       expect(s.runtime[0].id).toBe(saved[0].runtimeSkillId)
       expect(s.runtime[0].content).toContain("# Proof 1.0.0")
+      expect(s.runtime[0].description).toBe(s.current.description)
       expect(s.runtime[0].content).not.toContain("name: Proof Skill")
       const dir = path.dirname(s.runtime[0].path)
       expect(await readFile(path.join(dir, "references/proof.txt"), "utf8")).toBe("runtime-proof-1.0.0")
@@ -239,11 +247,54 @@ describe("InstallManager end-to-end without live Store", () => {
       const next = await s.api.installStart({ assetId: s.current.assetId, version: "1.1.0", idempotencyKey: "reload-failure" })
       const failed = await s.settle(next.operationId)
       expect(failed.state).toBe("failed")
-      expect(failed.error).toContain("simulated Runtime reload failure")
+      expect(failed.error).toContain("simulated Runtime reload failure after partial activation")
       expect((await s.api.installationList()).items[0].version).toBe("1.0.0")
       expect(JSON.parse(await readFile(path.join(skillRoot, "active.json"), "utf8")).version).toBe("1.0.0")
       expect(s.runtime[0].content).toContain("# Proof 1.0.0")
       await expect(stat(path.join(skillRoot, "versions", "1.1.0"))).rejects.toThrow()
+    } finally { await s.close() }
+  })
+
+  test("restores the Store description after a server restart when SKILL.md omits it", async () => {
+    const s = await environment()
+    let restarted: InstallManager | undefined
+    try {
+      const started = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "description-restart" })
+      expect((await s.settle(started.operationId)).state).toBe("installed")
+      expect(s.runtime[0].description).toBe(s.current.description)
+      await s.manager.close()
+      restarted = new InstallManager(s.ctx, s.store, s.config)
+      await restarted.initialize()
+      expect(s.runtime[0].description).toBe(s.current.description)
+      expect((await restarted.handlers().installationList()).items[0].description).toBe(s.current.description)
+    } finally {
+      await restarted?.close()
+      await s.close()
+    }
+  })
+
+  test("different requested version cannot join an active operation", async () => {
+    const s = await environment()
+    try {
+      const started = await s.api.installStart({ assetId: s.current.assetId, version: "1.0.0", idempotencyKey: "active-v1" })
+      await expect(s.api.installStart({ assetId: s.current.assetId, version: "1.1.0", idempotencyKey: "active-v2" }))
+        .rejects.toThrow("different version")
+      expect((await s.settle(started.operationId)).state).toBe("installed")
+    } finally { await s.close() }
+  })
+
+  test("rollback storage failure still leaves the operation terminal", async () => {
+    const s = await environment()
+    try {
+      const first = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "storage-before" })
+      expect((await s.settle(first.operationId)).state).toBe("installed")
+      s.current.version = "1.1.0"
+      s.current.failInstallationWrites = true
+      const next = await s.api.installStart({ assetId: s.current.assetId, version: "1.1.0", idempotencyKey: "storage-failure" })
+      const failed = await s.settle(next.operationId)
+      expect(failed.state).toBe("failed")
+      expect(failed.error).toContain("simulated installation storage failure")
+      expect(failed.error).toContain("installation state restore failed")
     } finally { await s.close() }
   })
 
