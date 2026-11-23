@@ -163,7 +163,7 @@ Expected:
 - skills/ss-.../versions/<version>/.store-manifest.json
 - supporting files under the same version directory.
 
-The plugin derives a Location hash subdirectory under the configured root.
+The plugin derives a Location hash subdirectory under the configured root. Durable `ctx.storage` keys also use `location:v1:<hash>:` because OpenCode's host storage namespace is plugin-ID-scoped, not Location-scoped.
 
 ## 9. Prove the Agent can use it
 
@@ -215,7 +215,7 @@ Record exact command, exit code, duration and commit SHA in feedback/. Do not re
 | Skill not in Runtime | Check operation terminal error, SKILL.md parse, path permissions, ctx.skill.reload() and ctx.skill.list() |
 | Agent cannot load Skill | Check exact case-sensitive Runtime ID and Agent skill permission rules |
 | Supporting file missing | ZIP must preserve the directory tree beside SKILL.md |
-| Another project sees different installed list | Expected Location isolation; confirm the active Location in Web |
+| Another project sees different installed list | Expected Location isolation; confirm the active Location in Web and verify its `location:v1:<hash>:` durable-state prefix |
 
 ## 13. Rollback
 
