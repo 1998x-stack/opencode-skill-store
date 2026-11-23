@@ -281,7 +281,7 @@ describe("InstallManager end-to-end without live Store", () => {
       const started = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "active-pointer-repair" })
       expect((await s.settle(started.operationId)).state).toBe("installed")
       await s.manager.close()
-      const runtimeSkillId = (s.api.installationList() as unknown as { items: Installation[] }).items[0].runtimeSkillId
+      const runtimeSkillId = (await s.api.installationList()).items[0].runtimeSkillId
       const activeFile = path.join(s.config.installRoot, "skills", runtimeSkillId, "active.json")
       await writeFile(activeFile, JSON.stringify({ version: "9.9.9", sha256: "0".repeat(64) }))
       restarted = new InstallManager(s.ctx, s.store, s.config)
@@ -302,7 +302,7 @@ describe("InstallManager end-to-end without live Store", () => {
       const started = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "manifest-integrity" })
       expect((await s.settle(started.operationId)).state).toBe("installed")
       await s.manager.close()
-      const runtimeSkillId = (s.api.installationList() as unknown as { items: Installation[] }).items[0].runtimeSkillId
+      const runtimeSkillId = (await s.api.installationList()).items[0].runtimeSkillId
       const manifest = path.join(s.config.installRoot, "skills", runtimeSkillId, "versions", "1.0.0", ".store-manifest.json")
       await writeFile(manifest, JSON.stringify({ assetId: s.current.assetId, version: "1.0.0", sha256: "0".repeat(64) }))
       restarted = new InstallManager(s.ctx, s.store, s.config)
