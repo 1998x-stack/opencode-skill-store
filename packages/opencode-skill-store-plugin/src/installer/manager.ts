@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
-import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
+import { chmod, lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
@@ -51,6 +51,24 @@ function operationPath(root: string, id: string) {
   return path.join(root, "staging", id)
 }
 
+async function ensurePrivateDirectory(directory: string) {
+  await mkdir(directory, { recursive: true, mode: 0o700 })
+  const info = await lstat(directory)
+  if (!info.isDirectory() || info.isSymbolicLink())
+    throw new Error("Refusing to use a non-directory or symbolic link in the Skill Store install root")
+  await chmod(directory, 0o700)
+}
+
+async function assertDirectoryIfExists(directory: string) {
+  try {
+    const info = await lstat(directory)
+    if (!info.isDirectory() || info.isSymbolicLink())
+      throw new Error("Refusing to use a non-directory or symbolic link in the Skill Store install root")
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+  }
+}
+
 export class InstallManager {
   private installations: Installation[] = []
   private operations: Operation[] = []
@@ -87,8 +105,9 @@ export class InstallManager {
   }
 
   async initialize() {
-    await mkdir(path.join(this.config.installRoot, "skills"), { recursive: true, mode: 0o700 })
-    await mkdir(path.join(this.config.installRoot, "staging"), { recursive: true, mode: 0o700 })
+    await ensurePrivateDirectory(this.config.installRoot)
+    await ensurePrivateDirectory(path.join(this.config.installRoot, "skills"))
+    await ensurePrivateDirectory(path.join(this.config.installRoot, "staging"))
     this.installations = asArray<unknown>(await this.ctx.storage.get("installations"))
       .map(asRecord)
       .filter((item) =>
@@ -129,7 +148,7 @@ export class InstallManager {
     await this.persistOperations()
     // Abandoned work cannot resume safely after process restart. Remove only our own staging entries.
     await rm(path.join(this.config.installRoot, "staging"), { recursive: true, force: true })
-    await mkdir(path.join(this.config.installRoot, "staging"), { recursive: true, mode: 0o700 })
+    await ensurePrivateDirectory(path.join(this.config.installRoot, "staging"))
     this.snapshot = await this.loadRuntimeSnapshot()
     this.skillRegistration = await this.ctx.skill.transform((editor) => {
       for (const item of this.snapshot) editor.add(item)
@@ -323,7 +342,7 @@ export class InstallManager {
 
     try {
       signal.throwIfAborted()
-      await mkdir(stageRoot, { recursive: true, mode: 0o700 })
+      await ensurePrivateDirectory(stageRoot)
       await this.progress(operation, "resolving", 5, "Resolving asset and package metadata")
       const detail = await this.store.detail(operation.assetId, signal)
       signal.throwIfAborted()
@@ -365,9 +384,12 @@ export class InstallManager {
 
       await this.progress(operation, "committing", 75, "Committing immutable version directory")
       const skillRoot = path.join(this.config.installRoot, "skills", id)
-      const versionRoot = path.join(skillRoot, "versions", selected.version)
+      const versionsRoot = path.join(skillRoot, "versions")
+      const versionRoot = path.join(versionsRoot, selected.version)
       committedVersionRoot = versionRoot
-      await mkdir(path.dirname(versionRoot), { recursive: true, mode: 0o700 })
+      await ensurePrivateDirectory(skillRoot)
+      await ensurePrivateDirectory(versionsRoot)
+      await assertDirectoryIfExists(versionRoot)
       const manifestPath = path.join(versionRoot, ".store-manifest.json")
 
       try {
@@ -555,9 +577,13 @@ export class InstallManager {
         item.status = "broken"
         continue
       }
-      const versionRoot = path.join(installRoot, "skills", item.runtimeSkillId, "versions", item.version)
+      const skillRoot = path.join(installRoot, "skills", item.runtimeSkillId)
+      const versionRoot = path.join(skillRoot, "versions", item.version)
       const skillFile = path.join(versionRoot, "SKILL.md")
       try {
+        await assertDirectoryIfExists(skillRoot)
+        await assertDirectoryIfExists(path.join(skillRoot, "versions"))
+        await assertDirectoryIfExists(versionRoot)
         const resolvedSkillFile = await realpath(skillFile)
         const relative = path.relative(installRoot, resolvedSkillFile)
         if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
