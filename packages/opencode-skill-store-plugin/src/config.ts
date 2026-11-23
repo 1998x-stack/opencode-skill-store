@@ -12,6 +12,8 @@ export type StoreConfig = {
   assetDetailPath: string
   packageContentPath: string
   installRoot: string
+  /** Prefix for durable state owned by one OpenCode Location. */
+  storagePrefix: string
   maxPackageBytes: number
   maxUnpackedBytes: number
   maxSkillFileBytes: number
@@ -72,6 +74,9 @@ export function loadConfig(options: PluginOptions, location: Plugin.Context["loc
       process.env.SKILL_STORE_PACKAGE_CONTENT_PATH ??
       "/v1/asset-store/packages/{id}/content",
     installRoot: path.resolve(expandHome(root), locationKey),
+    // OpenCode ctx.storage is namespaced by plugin ID, not by Location.
+    // Add an explicit Location prefix so separate project/workspace instances cannot share state.
+    storagePrefix: `location:v1:${locationKey}:`,
     maxPackageBytes: positive(options.maxPackageBytes ?? process.env.SKILL_STORE_MAX_PACKAGE_BYTES, 100 * 1024 * 1024),
     maxUnpackedBytes: positive(
       options.maxUnpackedBytes ?? process.env.SKILL_STORE_MAX_UNPACKED_BYTES,
