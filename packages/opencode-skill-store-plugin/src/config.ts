@@ -50,7 +50,11 @@ function parseBaseUrl(value: string): URL {
 
 export function loadConfig(options: PluginOptions, location: Plugin.Context["location"]): StoreConfig {
   const baseUrl = text(options.storeBaseUrl) ?? process.env.SKILL_STORE_BASE_URL
-  const apiKey = text(options.apiKey) ?? process.env.SKILL_STORE_API_KEY
+  // Credentials must never be stored in project-level opencode.jsonc plugin options.
+  if (text(options.apiKey)) {
+    throw new Error("SKILL_STORE_API_KEY must be provided through the OpenCode Server process environment, not plugin options")
+  }
+  const apiKey = text(process.env.SKILL_STORE_API_KEY)
   // Prefixes may intentionally include a trailing separator (for example, "Bearer ").
   const apiKeyPrefix = typeof options.apiKeyPrefix === "string"
     ? options.apiKeyPrefix
