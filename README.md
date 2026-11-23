@@ -49,7 +49,7 @@
 - [x] 安全解包路径校验与 frontmatter 单元测试
 - [x] 部署教程、API 契约、测试计划和 Pi Agent Prompt
 - [ ] 对接真实 Go Store Router/OpenAPI
-- [x] GitHub Actions：Server Plugin TypeScript typecheck；34/34 测试通过
+- [x] GitHub Actions：Server Plugin TypeScript typecheck；46/46 测试通过
 - [x] GitHub Actions：OpenCode Web TypeScript typecheck；2876/2876 现有 App 单元测试通过
 - [x] 生成并提交 docs/architecture.pdf（HTML 源码也已提交）
 - [ ] 本地真实 Go Store / 浏览器 Playwright E2E / LLM Agent 实际调用验收
