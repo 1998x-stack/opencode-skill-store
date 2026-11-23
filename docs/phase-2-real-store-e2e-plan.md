@@ -22,6 +22,7 @@ Do not expand the marketplace feature set before this slice is proven.
 - Latest Web integration CI: TypeScript check passed; 2,876 App unit tests passed.
 - A P0 state-isolation defect was found and fixed: OpenCode Host `ctx.storage` is plugin-ID-scoped, not Location-scoped. The plugin now prefixes durable keys with `location:v1:<hash>:`, using the same Location hash as the filesystem.
 - A P0 credential-boundary defect was fixed: `apiKey` is rejected in Plugin Options and can only be read from the Server process environment.
+- The Web UI now treats `operationProgress` events as wake-up signals and refetches the current Location's durable `operationList`; OpenCode's public event Location omits `workspaceID`, so merging event payloads could mix same-directory workspaces.
 - Skill frontmatter now honors OpenCode's `disable-model-invocation` alias, with namespaced `metadata.opencode/autoinvoke` taking precedence.
 - The regression test uses two plugin managers sharing one storage backend, with the same directory and different workspace IDs.
 
