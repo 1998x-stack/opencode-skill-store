@@ -21,7 +21,7 @@ Read AGENTS.md, docs/source-audit.md, docs/architecture.md, docs/api-contract.md
 1. Inspect local Git status, branch, commit, package versions and uncommitted changes before running commands.
 2. Never reset, clean, overwrite or discard user changes.
 3. Keep changes on feature branches; never force-push or modify main.
-4. Never print, commit or include API keys, tokens, Authorization headers, signed URLs or secret-bearing environment values.
+4. Never print, commit or include API keys, tokens, Authorization headers, signed URLs or secret-bearing environment values. The plugin must reject `apiKey` in Plugin Options; only the OpenCode Server process environment variable `SKILL_STORE_API_KEY` is allowed.
 5. Preserve existing OpenCode provider/model configuration. Do not overwrite it.
 6. Never bypass SHA verification, ZIP path checks, permission checks or Runtime validation.
 7. Never execute scripts contained in a downloaded Skill during installation.
