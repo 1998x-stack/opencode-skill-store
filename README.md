@@ -15,6 +15,7 @@
 | docs/api-contract.md | Go Store HTTP API 与 OpenCode RPC 契约 |
 | docs/testing.md | 单元、集成、E2E、故障注入测试矩阵 |
 | docs/pi-agent-prompt.md | 交给 Pi Agent 的部署与迭代 Prompt |
+| docs/phase-2-real-store-e2e-plan.md | 下一阶段真实 Store / Browser E2E / Agent 验收计划 |
 | docs/source-audit.md | OpenCode Fork 源码审计与差异记录 |
 | docs/code-map.md | 完整 code category 与模块职责 |
 | docs/security-and-rbac.md | 多租户与跨部门权限边界、生产上线门槛 |
