@@ -3,7 +3,7 @@
 ## What P0 implements
 
 - Browser -> OpenCode Server Typed RPC, never direct browser -> Go Store.
-- Server-only API Key and ZIP download.
+- Server-only API Key and ZIP download; `apiKey` in Plugin Options is rejected, and only `SKILL_STORE_API_KEY` from the OpenCode Server process environment is accepted.
 - SHA-256 package integrity verification and archive-entry filtering.
 - Install files and durable `ctx.storage` records isolated by a versioned OpenCode Location hash (`directory` + optional `workspaceID`). The host's storage namespace is plugin-ID-only, so this isolation is implemented explicitly in the key prefix.
 - Only plugin-created Runtime IDs, prefixed with `ss-`, are managed.
