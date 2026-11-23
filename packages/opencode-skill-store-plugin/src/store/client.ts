@@ -2,6 +2,7 @@ import type { AssetDetail, AssetSummary, PackageInfo } from "../contracts.js"
 import type { StoreConfig } from "../config.js"
 
 type JsonObject = Record<string, unknown>
+const MAX_JSON_RESPONSE_BYTES = 5 * 1024 * 1024
 
 function record(value: unknown): JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {}
@@ -135,6 +136,39 @@ export class StoreClient {
       redirect: "error",
     })
     if (!response.ok) throw new Error("Skill Store API failed: HTTP " + response.status + " (" + url.pathname + ")")
-    return response.json()
+    const declaredBytes = Number(response.headers.get("content-length"))
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_JSON_RESPONSE_BYTES)
+      throw new Error("Skill Store API response exceeds the 5 MiB metadata limit")
+    if (!response.body) throw new Error("Skill Store API returned an empty response body")
+
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let totalBytes = 0
+    try {
+      while (true) {
+        const next = await reader.read()
+        if (next.done) break
+        totalBytes += next.value.byteLength
+        if (totalBytes > MAX_JSON_RESPONSE_BYTES) {
+          await reader.cancel().catch(() => undefined)
+          throw new Error("Skill Store API response exceeds the 5 MiB metadata limit")
+        }
+        chunks.push(next.value)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+
+    const payload = new Uint8Array(totalBytes)
+    let offset = 0
+    for (const chunk of chunks) {
+      payload.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    try {
+      return JSON.parse(new TextDecoder().decode(payload))
+    } catch {
+      throw new Error("Skill Store API returned invalid JSON")
+    }
   }
 }
