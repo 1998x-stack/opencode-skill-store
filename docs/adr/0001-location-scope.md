@@ -19,6 +19,7 @@ OpenCode's `ctx.storage` is namespaced by plugin ID only, not automatically by L
 
 - The same Store Skill may be installed independently into multiple Locations.
 - Filesystem paths and durable `ctx.storage` keys use the same Location hash.
+- Unscoped legacy keys (`installations`, `operations`) are not auto-migrated: their owning Location cannot be determined safely. If any pre-release local data exists, preserve it for manual recovery rather than copying it into every Location.
 - The same plugin ID can serve multiple Locations without sharing installation or operation records.
 - Web event listeners filter by `event.location.directory`; workspace-aware event filtering is a follow-up for same-directory workspaces.
 - Disk usage may duplicate identical Skill versions across Locations.
