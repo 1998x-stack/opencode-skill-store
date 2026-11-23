@@ -37,6 +37,7 @@
 ## 重要边界
 
 - OpenCode Skill Registry 是 Location-scoped；本插件按 `directory + workspaceID` 隔离安装目录与安装记录。Host 的 `ctx.storage` 只按 plugin ID namespace，因此安装记录和操作记录还必须显式使用 `location:v1:<hash>:` key prefix。
+- 当前集成基线固定为 OpenCode Fork 2.3.2 + `@opencode/plugin` 2.3.2；upstream 已推进到 2.4.0，升级应单独同步和验收。
 - 浏览器不直接访问 Go Store，不接触 API Key，也不下载 ZIP。
 - Go Store API Key 只允许从 OpenCode Server 进程环境变量 `SKILL_STORE_API_KEY` 读取；Plugin Options 中提供 `apiKey` 会被拒绝。
 - SHA-256 校验只证明下载字节与可信 Store metadata 一致；发布者身份认证需要后续增加签名验证。
