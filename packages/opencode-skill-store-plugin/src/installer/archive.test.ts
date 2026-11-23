@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { extractSkillArchive, safeArchivePath } from "./archive.js"
 
-const limits = { maxEntries: 20, maxUnpackedBytes: 64 * 1024, maxCompressionRatio: 100 }
+const limits = { maxEntries: 20, maxUnpackedBytes: 64 * 1024, maxSkillFileBytes: 32 * 1024, maxCompressionRatio: 100 }
 const utf8 = (value: string) => Buffer.from(value, "utf8")
 
 // Minimal ZIP writer for deterministic, uncompressed fixtures. It deliberately allows
