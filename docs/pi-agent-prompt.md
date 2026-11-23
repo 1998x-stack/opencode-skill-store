@@ -50,7 +50,7 @@ Do not infer actual API behavior from candidate paths in docs/api-contract.md. U
 
 Inspect actual Fork commit, Bun version, @opencode/plugin, @opencode/schema and @opencode/client versions.
 
-Verify current Settings → Extensions → Skills UI, Server SDK reconnection behavior, ctx.location semantics, Skill.Info schema, ctx.skill.transform/reload/list, RPC registration and event payloads.
+Verify current Settings → Extensions → Skills UI, Server SDK reconnection behavior, ctx.location semantics, Skill.Info schema, ctx.skill.transform/reload/list, RPC registration and event payloads. Inspect `packages/core/src/plugin/host.ts`: `ctx.storage` is namespaced by plugin ID only, not by Location. Confirm the plugin prefixes every durable key with `location:v1:<hash>:` where the hash covers directory and optional workspaceID.
 
 The Web contract at packages/app/src/settings/providers/skill-store-rpc.ts must exactly match the plugin contract at packages/opencode-skill-store-plugin/src/contracts.ts.
 
@@ -92,7 +92,7 @@ Required cases:
 - duplicate idempotency key and concurrent same-asset install.
 - Runtime reload failure rollback.
 - enable/disable/uninstall rollback.
-- restart recovery and Location isolation.
+- restart recovery and Location isolation, including two Locations sharing one plugin KV backend (same directory, different workspaceID) with no shared installations or operations.
 
 ## Step 5 — Configure the actual Store
 
@@ -162,6 +162,7 @@ Run:
 - Server restart during pending operation.
 - Duplicate install click.
 - Switch Location and confirm isolation.
+- Reopen the same directory under a different workspaceID and confirm state isolation in both `ctx.storage` and the filesystem.
 
 Use fake data and temporary directories for destructive/fault tests.
 
