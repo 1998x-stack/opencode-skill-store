@@ -76,9 +76,23 @@ function zip(entries: FixtureEntry[]): Buffer {
 
 const terminal = new Set(["installed", "failed", "cancelled", "interrupted"])
 
-async function environment() {
+type EnvironmentOptions = {
+  storageData?: Map<string, unknown>
+  locationDirectory?: string
+  workspaceID?: string
+}
+
+async function environment(options: EnvironmentOptions = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "store-manager-test-"))
-  const data = new Map<string, unknown>()
+  const data = options.storageData ?? new Map<string, unknown>()
+  const location = {
+    directory: options.locationDirectory ?? path.join(root, "project"),
+    workspaceID: options.workspaceID,
+  }
+  const locationKey = createHash("sha256")
+    .update(location.directory + "\u0000" + (location.workspaceID ?? ""))
+    .digest("hex")
+    .slice(0, 16)
   const runtime: { id: string; name: string; description?: string; content: string; path: string }[] = []
   let transform: (editor: { add: (skill: typeof runtime[number]) => void }) => void = () => {}
 
@@ -86,7 +100,7 @@ async function environment() {
     add(skill: typeof runtime[number]) { runtime.push(skill) },
   }
   const ctx = {
-    location: { directory: path.join(root, "project") },
+    location,
     storage: {
       get: async (key: string) => structuredClone(data.get(key)),
       set: async (key: string, value: unknown) => {
@@ -159,7 +173,8 @@ async function environment() {
     assetsPath: "/assets",
     assetDetailPath: "/assets/{id}",
     packageContentPath: "/packages/{id}/content",
-    installRoot: path.join(root, "installed"),
+    installRoot: path.join(root, "installed", locationKey),
+    storagePrefix: `location:v1:${locationKey}:`,
     maxPackageBytes: 1024 * 1024,
     maxUnpackedBytes: 1024 * 1024,
     maxSkillFileBytes: 1024 * 1024,
@@ -201,6 +216,46 @@ describe("InstallManager end-to-end without live Store", () => {
       expect(await readFile(path.join(dir, "references/proof.txt"), "utf8")).toBe("runtime-proof-1.0.0")
       expect(JSON.parse(await readFile(path.join(s.config.installRoot, "skills", s.runtime[0].id, "active.json"), "utf8")).version).toBe("1.0.0")
     } finally { await s.close() }
+  })
+
+  test("isolates durable state between Locations sharing one plugin storage namespace", async () => {
+    const sharedStorage = new Map<string, unknown>()
+    const directory = path.join(tmpdir(), "shared-opencode-project")
+    const firstLocation = await environment({
+      storageData: sharedStorage,
+      locationDirectory: directory,
+      workspaceID: "workspace-a",
+    })
+    const secondLocation = await environment({
+      storageData: sharedStorage,
+      locationDirectory: directory,
+      workspaceID: "workspace-b",
+    })
+    try {
+      const first = await firstLocation.api.installStart({
+        assetId: firstLocation.current.assetId,
+        idempotencyKey: "workspace-a-install",
+      })
+      expect((await firstLocation.settle(first.operationId)).state).toBe("installed")
+      expect((await firstLocation.api.installationList()).items).toHaveLength(1)
+      expect((await secondLocation.api.installationList()).items).toHaveLength(0)
+      expect((await secondLocation.api.operationList()).items).toHaveLength(0)
+
+      const second = await secondLocation.api.installStart({
+        assetId: secondLocation.current.assetId,
+        idempotencyKey: "workspace-b-install",
+      })
+      expect((await secondLocation.settle(second.operationId)).state).toBe("installed")
+      expect((await firstLocation.api.installationList()).items).toHaveLength(1)
+      expect((await secondLocation.api.installationList()).items).toHaveLength(1)
+
+      expect(sharedStorage.has(firstLocation.config.storagePrefix + "installations")).toBe(true)
+      expect(sharedStorage.has(secondLocation.config.storagePrefix + "installations")).toBe(true)
+      expect(sharedStorage.has("installations")).toBe(false)
+      expect(sharedStorage.has("operations")).toBe(false)
+    } finally {
+      await Promise.all([firstLocation.close(), secondLocation.close()])
+    }
   })
 
   test("wrong SHA rejects update and preserves the previous runtime", async () => {
