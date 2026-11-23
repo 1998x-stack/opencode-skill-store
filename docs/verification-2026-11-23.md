@@ -8,26 +8,28 @@ This record describes commands actually executed by GitHub Actions for the imple
 
 - Repository: https://github.com/1998x-stack/opencode-skill-store
 - Branch: `skill-store-mvp`
-- Commit tested: `6720c6b755a76bcd927aae7728afb0c67bb81649`
-- Workflow: https://github.com/1998x-stack/opencode-skill-store/actions/runs/45183496306
+- Commit tested: `90546e7eb49548094e3ab4234307372a5c3611cc`
+- Workflow: https://github.com/1998x-stack/opencode-skill-store/actions/runs/45190252734
 - Result: **success**
 - `bun install`: success
 - `bun run typecheck`: success
-- `bun test`: **34 passed, 0 failed** across 4 files
+- `bun test`: **46 passed, 0 failed** across 5 files
 
 Test categories:
 - 3 SKILL.md frontmatter tests
 - 13 ZIP path containment tests (including multiple traversal/Windows paths)
 - 8 ZIP extraction and security tests
-- 5 fake-Store installer integration tests, including complete staged install, SHA failure rollback, Runtime reload failure rollback/version cleanup, idempotency and enable/disable/uninstall.
-- 5 Store HTTP adapter tests, including catalog normalization, version/package metadata, auth headers, redirect policy and secret-safe HTTP errors.
+- 8 fake-Store installer integration tests, including complete staged install, SHA failure rollback, partial Runtime activation rollback, restart metadata recovery, active-version conflict, storage rollback failure, idempotency and enable/disable/uninstall.
+- 9 Store HTTP adapter tests, including catalog normalization, strict asset/package metadata, version/package selection, same-origin route checks, auth headers, redirect policy, query bounds, cancellation and secret-safe HTTP errors.
+- 4 configuration tests, including home-directory expansion, HTTPS enforcement, credential-bearing URL rejection and positive-limit normalization.
+- ZIP extraction tests include a separate 2 MiB SKILL.md limit before YAML parsing.
 
 ## OpenCode Web Fork
 
 - Repository: https://github.com/1998x-stack/opencode
 - Branch: `skill-store-ui`
 - Commit tested: `242a2121af6a38cc1b31c821ed28526728ca1fd7`
-- Workflow: https://github.com/1998x-stack/opencode/actions/runs/45182650233
+- Workflow: https://github.com/1998x-stack/opencode/actions/runs/45189662142
 - Result: **success**
 - `bun install --frozen-lockfile`: success
 - `bun run --cwd packages/app typecheck:tsc`: success
