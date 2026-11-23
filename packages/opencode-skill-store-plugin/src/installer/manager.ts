@@ -356,6 +356,9 @@ export class InstallManager {
           : this.installations.filter((item) => item.assetId !== operation.assetId)
         await this.persistInstallations()
         await this.refreshRuntime().catch(() => undefined)
+        // A failed activation must not leave an unreachable version directory behind.
+        if (createdVersion && committedVersionRoot)
+          await rm(committedVersionRoot, { recursive: true, force: true }).catch(() => undefined)
       } else if (createdVersion && committedVersionRoot) {
         await rm(committedVersionRoot, { recursive: true, force: true }).catch(() => undefined)
       }
