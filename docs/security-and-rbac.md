@@ -8,6 +8,8 @@
 - Install state isolated by OpenCode Location directory hash.
 - Only plugin-created Runtime IDs, prefixed with `ss-`, are managed.
 - ZIP installation does not execute contained scripts.
+- `SKILL.md` is capped separately at 2 MiB before YAML parsing; the full archive remains subject to independent entry, byte and compression-ratio limits.
+- Runtime restore validates Store-owned IDs, version path segments and real paths against the managed install root.
 
 ## What P0 does not implement
 
