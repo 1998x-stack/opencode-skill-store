@@ -395,6 +395,7 @@ export class InstallManager {
         assetId: operation.assetId,
         runtimeSkillId: id,
         title: detail.asset.title,
+        description: parsed.description || detail.asset.description || detail.asset.title,
         version: selected.version,
         sha256: downloaded.sha256,
         enabled: previous?.enabled ?? true,
@@ -501,14 +502,30 @@ export class InstallManager {
 
   private async loadRuntimeSnapshot() {
     const result: Array<ReturnType<typeof this.runtimeInfo>> = []
+    const installRoot = await realpath(this.config.installRoot)
     for (const item of this.installations) {
-      if (!item.enabled || item.status !== "installed") continue
-      const versionRoot = path.join(this.config.installRoot, "skills", item.runtimeSkillId, "versions", item.version)
+      if (!item.enabled || (item.status !== "installed" && item.status !== "broken")) continue
+      if (item.runtimeSkillId !== runtimeID(item.assetId) || !/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(item.version)) {
+        item.status = "broken"
+        continue
+      }
+      const versionRoot = path.join(installRoot, "skills", item.runtimeSkillId, "versions", item.version)
       const skillFile = path.join(versionRoot, "SKILL.md")
       try {
-        const markdown = await readFile(skillFile, "utf8")
-        const parsed = parseSkillMarkdown(markdown, { name: item.title, description: item.title })
-        result.push(this.runtimeInfo(item.runtimeSkillId, skillFile, parsed))
+        const resolvedSkillFile = await realpath(skillFile)
+        const relative = path.relative(installRoot, resolvedSkillFile)
+        if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
+          throw new Error("Installed Skill path escapes the managed root")
+        const info = await lstat(skillFile)
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Installed SKILL.md is not a regular file")
+        const markdown = await readFile(resolvedSkillFile, "utf8")
+        const parsed = parseSkillMarkdown(markdown, {
+          name: item.title,
+          description: item.description || item.title,
+        })
+        item.description = parsed.description || item.description || item.title
+        item.status = "installed"
+        result.push(this.runtimeInfo(item.runtimeSkillId, resolvedSkillFile, parsed))
       } catch {
         item.status = "broken"
       }
