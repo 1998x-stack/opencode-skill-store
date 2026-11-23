@@ -35,7 +35,7 @@
 
 ## 重要边界
 
-- OpenCode Skill Registry 是 Location-scoped；本插件按 ctx.location.directory 隔离安装目录与安装记录。
+- OpenCode Skill Registry 是 Location-scoped；本插件按 `directory + workspaceID` 隔离安装目录与安装记录。Host 的 `ctx.storage` 只按 plugin ID namespace，因此安装记录和操作记录还必须显式使用 `location:v1:<hash>:` key prefix。
 - 浏览器不直接访问 Go Store，不接触 API Key，也不下载 ZIP。
 - SHA-256 校验只证明下载字节与可信 Store metadata 一致；发布者身份认证需要后续增加签名验证。
 - ZIP 安装不执行脚本。脚本只有在 Agent 后续调用工具时才可能运行，并继续受 OpenCode 权限规则约束。
@@ -49,7 +49,7 @@
 - [x] 安全解包路径校验与 frontmatter 单元测试
 - [x] 部署教程、API 契约、测试计划和 Pi Agent Prompt
 - [ ] 对接真实 Go Store Router/OpenAPI
-- [x] GitHub Actions：Server Plugin TypeScript typecheck；46/46 测试通过
+- [x] GitHub Actions：Server Plugin TypeScript typecheck；最新 Location-isolation 修复 CI 为 55/55 测试通过（见 verification record）
 - [x] GitHub Actions：OpenCode Web TypeScript typecheck；2876/2876 现有 App 单元测试通过
 - [x] 生成并提交 docs/architecture.pdf（HTML 源码也已提交）
 - [ ] 本地真实 Go Store / 浏览器 Playwright E2E / LLM Agent 实际调用验收
