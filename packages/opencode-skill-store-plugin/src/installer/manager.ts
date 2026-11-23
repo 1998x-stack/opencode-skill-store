@@ -206,7 +206,7 @@ export class InstallManager {
         try {
           await this.persistInstallations()
           await this.refreshRuntime()
-          await this.removeManagedDirectory(item.runtimeSkillId)
+          await this.removeManagedDirectory(item.runtimeSkillId, item.assetId)
         } catch (error) {
           this.installations = previous
           await this.persistInstallations()
@@ -592,11 +592,13 @@ export class InstallManager {
     return item
   }
 
-  private async removeManagedDirectory(runtimeSkillId: string) {
+  private async removeManagedDirectory(runtimeSkillId: string, assetId: string) {
+    if (runtimeSkillId !== runtimeID(assetId)) throw new Error("Refusing to remove a directory not owned by this Store installation")
     const root = path.resolve(this.config.installRoot, "skills")
     const target = path.resolve(root, runtimeSkillId)
     const relative = path.relative(root, target)
-    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("Refusing to remove a path outside the managed Skill directory")
+    if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
+      throw new Error("Refusing to remove a path outside the managed Skill directory")
     await rm(target, { recursive: true, force: true })
   }
 
