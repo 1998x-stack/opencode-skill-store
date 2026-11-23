@@ -112,7 +112,9 @@ sequenceDiagram
 
 ## 4. Location 维度与隔离
 
-当前 OpenCode 的 Skill Registry 是 Location-scoped。ctx.location 描述插件实例加载的 Location，而不是所有 Session 的位置。
+当前 OpenCode 的 Skill Registry 是 Location-scoped。`ctx.location` 描述插件实例加载的 Location，而不是所有 Session 的位置。Location 身份由 `directory` 与可选 `workspaceID` 共同确定。
+
+重要实现细节：OpenCode Host 的 `ctx.storage` 仅按 plugin ID 建立 namespace，不会自动隔离 Location。因此插件必须显式使用 `location:v1:<location-hash>:` 作为每个 durable key 的前缀；只隔离磁盘目录是不够的。
 
 安装根目录结构：
 
@@ -134,14 +136,15 @@ $OPENCODE_SKILL_STORE_DIR/
         content/
 ~~~
 
-- 默认根目录：~/.opencode/skill-store/<location-hash>。
+- 默认根目录：~/.opencode/skill-store/<location-hash>，hash 输入为 `directory + NUL + workspaceID`。
+- `ctx.storage` keys 使用 `location:v1:<location-hash>:` 前缀，例如 `location:v1:<hash>:installations` 与 `location:v1:<hash>:operations`。
 - 不把 Store 安装记录写入 Go Store 全局 Catalog。
 - 不把一个 Location 的 installed list 返回给另一个 Location。
 - 如未来需要真正 Server-global 安装，应设计显式共享作用域、全局锁和跨 Location reload 通知；不能简单移除 location hash。
 
 ## 5. Go Store HTTP API 适配
 
-当前可访问的 opencode-skill-store 仓库是空仓库；Go Store 后端源码没有在本任务中提供。因此下列是插件默认候选路径，不是已经核验的后端事实：
+当前 `opencode-skill-store` 仓库是 OpenCode Server Plugin 集成仓库，不包含 Go Store 服务端源码。因此下列是插件默认候选路径，不是已经核验的后端事实：
 
 - GET /v1/asset-store/assets?kind=skill&q=&limit=&cursor=
 - GET /v1/asset-store/assets/{asset_id}
@@ -236,7 +239,7 @@ SHA-256 不等于发布者身份认证。P1 增加签名 manifest（如 Ed25519�
 - idempotencyKey 保证重复提交返回同一个 operation。
 - 同一 Location 同一 asset 同时只允许一个 active install/update。
 - 每个 asset 使用互斥锁；全局下载并发后续可配置。
-- operation 状态写入 Plugin durable storage。
+- operation 状态写入 Plugin durable storage 的 Location 前缀空间（`location:v1:<hash>:`）；Host 的 plugin-ID namespace 不提供 Location 隔离。
 - Server 重启后，queued/running operation 标记 interrupted；清理 staging；从 installation state 和 active pointer reconcile。
 - UI 刷新后重新读取 operationList，而不是自动重发安装请求。
 
@@ -262,7 +265,7 @@ P0 必须证明：
 5. Session 中输入 @ss-... 能加载正确正文。
 6. Skill 指定读取 references/example.md 时，Agent 能读取同版本 supporting file。
 7. 更新失败时旧版本仍然 active、Runtime 仍可用。
-8. Server A / Location A 的安装状态不会泄漏给另一个 Server / Location。
+8. Server A / Location A 的安装状态不会泄漏给另一个 Server / Location；同一 Server 中相同 directory、不同 workspaceID 也必须隔离 durable state。
 9. 刷新页面或重启 Server 后，operation / installation 状态可恢复。
 
 ## 12. 参考资料
