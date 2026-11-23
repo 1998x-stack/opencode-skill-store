@@ -171,13 +171,14 @@ GET /v1/asset-store/packages/{package_id}/content</pre>
 </section>
 <section id="location">
   <h2>09 · Location 隔离</h2>
-  <p>当前 OpenCode Plugin 的 ctx.location 表示插件实例加载的 Location。安装目录按 ctx.location.directory 计算稳定 hash：</p>
+  <p>当前 OpenCode Plugin 的 ctx.location 表示插件实例加载的 Location。安装目录 hash 使用 directory 与可选 workspaceID。注意：Host 的 ctx.storage 只按 plugin ID 建立 namespace，不会自动隔离 Location。</p>
+  <p>因此文件目录和 durable state 都必须使用同一个显式 Location hash；ctx.storage key 采用 <code>location:v1:&lt;hash&gt;:</code> 前缀：</p>
   <pre>$OPENCODE_SKILL_STORE_DIR/&lt;location-hash&gt;/
   skills/&lt;runtime-id&gt;/
     active.json
     versions/&lt;version&gt;/SKILL.md
   staging/&lt;operation-id&gt;/</pre>
-  <p>Server 和 Location 是两个维度。相同 Server 的不同项目也可能有不同安装状态。真正 Server-global 共享需要显式 scope、全局锁和跨 Location reload 通知，不可简单共享一个目录。</p>
+  <p>Server 和 Location 是两个维度。相同 Server 的不同项目也可能有不同安装状态。持久化 key 同样按 Location 隔离；真正 Server-global 共享需要显式 scope、全局锁和跨 Location reload 通知，不可简单共享一个目录。</p>
 </section>
 <section id="test">
   <h2>10 · 测试与验收</h2>
