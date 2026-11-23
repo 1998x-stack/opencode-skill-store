@@ -225,6 +225,7 @@ export type Installation = {
 
 export type Operation = {
   operationId: string
+  idempotencyKey: string | null
   assetId: string
   title: string
   version: string
