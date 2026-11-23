@@ -51,6 +51,7 @@ const installation = object(
     assetId: string,
     runtimeSkillId: string,
     title: string,
+    description: string,
     version: string,
     sha256: string,
     enabled: boolean,
@@ -63,6 +64,7 @@ const installation = object(
     "assetId",
     "runtimeSkillId",
     "title",
+    "description",
     "version",
     "sha256",
     "enabled",
@@ -75,6 +77,7 @@ const installation = object(
 const operation = object(
   {
     operationId: string,
+    idempotencyKey: nullableString,
     assetId: string,
     title: string,
     version: string,
@@ -89,6 +92,7 @@ const operation = object(
   },
   [
     "operationId",
+    "idempotencyKey",
     "assetId",
     "title",
     "version",
@@ -215,6 +219,7 @@ export type Installation = {
   assetId: string
   runtimeSkillId: string
   title: string
+  description: string
   version: string
   sha256: string
   enabled: boolean
