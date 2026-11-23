@@ -178,7 +178,7 @@ async function environment() {
     throw new Error("Install operation did not reach a terminal state")
   }
   return {
-    manager, api, settle, runtime, current, config, root, ctx, store,
+    manager, api, settle, runtime, current, config, root, ctx, store, data,
     close: async () => { await manager.close(); await rm(root, { recursive: true, force: true }) },
   }
 }
@@ -268,6 +268,47 @@ describe("InstallManager end-to-end without live Store", () => {
       await restarted.initialize()
       expect(s.runtime[0].description).toBe(s.current.description)
       expect((await restarted.handlers().installationList()).items[0].description).toBe(s.current.description)
+    } finally {
+      await restarted?.close()
+      await s.close()
+    }
+  })
+
+  test("repairs a stale active pointer from the durable installation record on restart", async () => {
+    const s = await environment()
+    let restarted: InstallManager | undefined
+    try {
+      const started = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "active-pointer-repair" })
+      expect((await s.settle(started.operationId)).state).toBe("installed")
+      await s.manager.close()
+      const runtimeSkillId = (s.api.installationList() as unknown as { items: Installation[] }).items[0].runtimeSkillId
+      const activeFile = path.join(s.config.installRoot, "skills", runtimeSkillId, "active.json")
+      await writeFile(activeFile, JSON.stringify({ version: "9.9.9", sha256: "0".repeat(64) }))
+      restarted = new InstallManager(s.ctx, s.store, s.config)
+      await restarted.initialize()
+      expect(s.runtime).toHaveLength(1)
+      expect(s.runtime[0].content).toContain("# Proof 1.0.0")
+      expect(JSON.parse(await readFile(activeFile, "utf8")).version).toBe("1.0.0")
+    } finally {
+      await restarted?.close()
+      await s.close()
+    }
+  })
+
+  test("does not register a version when its package manifest disagrees with durable state", async () => {
+    const s = await environment()
+    let restarted: InstallManager | undefined
+    try {
+      const started = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "manifest-integrity" })
+      expect((await s.settle(started.operationId)).state).toBe("installed")
+      await s.manager.close()
+      const runtimeSkillId = (s.api.installationList() as unknown as { items: Installation[] }).items[0].runtimeSkillId
+      const manifest = path.join(s.config.installRoot, "skills", runtimeSkillId, "versions", "1.0.0", ".store-manifest.json")
+      await writeFile(manifest, JSON.stringify({ assetId: s.current.assetId, version: "1.0.0", sha256: "0".repeat(64) }))
+      restarted = new InstallManager(s.ctx, s.store, s.config)
+      await restarted.initialize()
+      expect(s.runtime).toHaveLength(0)
+      expect((await restarted.handlers().installationList()).items[0].status).toBe("broken")
     } finally {
       await restarted?.close()
       await s.close()
