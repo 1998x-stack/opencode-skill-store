@@ -17,10 +17,11 @@ bun run typecheck
 Covered in current CI:
 - ZIP path containment, traversal, absolute paths, Windows drive/UNC, reserved names, alternate data streams and duplicate paths.
 - ZIP extraction, symlink/special-file rejection, encrypted entries, entry count, unpacked-size and SKILL.md limits.
-- frontmatter parsing and Store metadata fallback.
+- frontmatter parsing, Store metadata fallback, `metadata.opencode/autoinvoke` and the official `disable-model-invocation` alias with precedence checks.
 - Store HTTP normalization, origin/redirect controls, credential handling, response limits and cancellation.
 - installer SHA/size checks, immutable version conflicts, rollback after Runtime reload failure, interrupted-operation recovery, idempotency, enable/disable/uninstall and persistence failures.
 - Location isolation regression: two plugin instances share one underlying storage Map but use the same directory with different workspaceIDs; installation and operation records remain separate.
+- Secret-source regression: plugin options cannot carry `apiKey`; the Store credential is read only from the Server process environment.
 
 Remaining before production:
 - actual Go Store Router/OpenAPI contract and auth behavior.
