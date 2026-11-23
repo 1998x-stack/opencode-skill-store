@@ -96,3 +96,14 @@ Capture operation ID and state snapshots, Runtime Skill IDs, Session message IDs
 ## 8. Feedback format
 
 Each test run writes a sanitized feedback/iteration-YYYYMMDD-HHmm.md. Never include API keys, Authorization headers, full signed URLs, or user project file contents.
+
+
+## Additional hardening regression coverage
+
+- Store HTTP routes cannot change origin; redirects are rejected and download requests time out.
+- Catalog queries and identifiers have explicit length bounds.
+- Missing asset kind or package platform/architecture is not silently treated as a Skill or universal package.
+- `SKILL.md` has a separate 2 MiB cap before YAML parsing.
+- Runtime restore validates persisted runtime IDs, version segments and resolved paths remain inside the managed install root.
+- Store-provided descriptions survive OpenCode Server restarts when SKILL.md has no description.
+- Concurrent mutations are serialized; rollback failure still transitions the operation to a terminal state.
