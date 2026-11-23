@@ -134,6 +134,18 @@ describe("StoreClient", () => {
     expect(accept).toBe("application/zip, application/octet-stream")
   })
 
+  test("rejects oversized metadata responses before JSON parsing", async () => {
+    globalThis.fetch = (async () => new Response("{}", {
+      headers: { "content-length": String(5 * 1024 * 1024 + 1) },
+    })) as unknown as typeof fetch
+    await expect(new StoreClient(config).detail("research")).rejects.toThrow("5 MiB metadata limit")
+  })
+
+  test("returns a stable error for malformed Store JSON", async () => {
+    globalThis.fetch = (async () => new Response("{not-json")) as unknown as typeof fetch
+    await expect(new StoreClient(config).detail("research")).rejects.toThrow("invalid JSON")
+  })
+
   test("reports HTTP errors without leaking credential values", async () => {
     globalThis.fetch = (async () => new Response("unauthorized", { status: 401 })) as unknown as typeof fetch
     const error = await new StoreClient(config).detail("private").catch((value) => value)
