@@ -240,7 +240,7 @@ describe("InstallManager end-to-end without live Store", () => {
       const failed = await s.settle(next.operationId)
       expect(failed.state).toBe("failed")
       expect(failed.error).toContain("simulated Runtime reload failure")
-      expect((await s.api.installationList())[0]?.version ?? (await s.api.installationList()).items[0].version).toBe("1.0.0")
+      expect((await s.api.installationList()).items[0].version).toBe("1.0.0")
       expect(JSON.parse(await readFile(path.join(skillRoot, "active.json"), "utf8")).version).toBe("1.0.0")
       expect(s.runtime[0].content).toContain("# Proof 1.0.0")
       await expect(stat(path.join(skillRoot, "versions", "1.1.0"))).rejects.toThrow()
