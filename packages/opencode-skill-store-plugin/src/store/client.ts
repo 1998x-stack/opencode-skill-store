@@ -27,20 +27,20 @@ function normalizeAsset(input: unknown): AssetSummary {
   const tags = first(row, "tags", "labels")
   const version = first(row, "latest_version", "latestVersion", "version")
   return {
-    assetId: valueString(first(row, "asset_id", "assetId", "id")),
-    title: valueString(first(row, "title", "name", "display_name")),
-    description: valueString(first(row, "description", "summary")),
+    assetId: valueString(first(row, "asset_id", "assetId", "id")).trim(),
+    title: valueString(first(row, "title", "name", "display_name")).trim(),
+    description: valueString(first(row, "description", "summary")).trim(),
     kind: valueString(first(row, "kind", "type")).trim().toLowerCase(),
-    tags: Array.isArray(tags) ? tags.filter((item): item is string => typeof item === "string") : [],
-    latestVersion: typeof version === "string" ? version : null,
+    tags: Array.isArray(tags) ? tags.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [],
+    latestVersion: typeof version === "string" && version.trim() ? version.trim() : null,
   }
 }
 
 function normalizePackage(input: unknown): PackageInfo {
   const row = record(input)
   return {
-    packageId: valueString(first(row, "package_id", "packageId", "id")),
-    version: valueString(first(row, "version")),
+    packageId: valueString(first(row, "package_id", "packageId", "id")).trim(),
+    version: valueString(first(row, "version")).trim(),
     platform: valueString(first(row, "platform", "os")).trim().toLowerCase(),
     arch: valueString(first(row, "arch", "architecture")).trim().toLowerCase(),
     sizeBytes: valueNumber(first(row, "size_bytes", "sizeBytes", "size")),
