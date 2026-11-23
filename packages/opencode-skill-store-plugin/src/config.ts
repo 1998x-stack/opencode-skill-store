@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
-import type { Plugin, PluginOptions } from "@opencode/plugin"
+import type { Plugin } from "@opencode/plugin"
 
 export type StoreConfig = {
   baseUrl?: URL
@@ -27,12 +27,12 @@ function positive(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
 }
 
-export function loadConfig(options: PluginOptions, location: Plugin.Context["location"]): StoreConfig {
+export function loadConfig(options: Plugin.PluginOptions, location: Plugin.Context["location"]): StoreConfig {
   const baseUrl = text(options.storeBaseUrl) ?? process.env.SKILL_STORE_BASE_URL
   const apiKey = text(options.apiKey) ?? process.env.SKILL_STORE_API_KEY
   const root = text(options.installRoot) ?? process.env.OPENCODE_SKILL_STORE_DIR ?? path.join(homedir(), ".opencode", "skill-store")
   const locationKey = createHash("sha256")
-    .update(location.directory)
+    .update(location.directory + "\u0000" + (location.workspaceID ?? ""))
     .digest("hex")
     .slice(0, 16)
 

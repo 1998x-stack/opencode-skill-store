@@ -6,7 +6,7 @@ import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { Skill } from "@opencode/plugin"
 import type { Plugin } from "@opencode/plugin"
-import type { AssetDetail, AssetSummary, Installation, Operation, PackageInfo } from "../contracts.js"
+import type { AssetDetail, Installation, Operation, PackageInfo } from "../contracts.js"
 import type { StoreConfig } from "../config.js"
 import { extractSkillArchive } from "./archive.js"
 import { parseSkillMarkdown } from "../runtime/frontmatter.js"
@@ -54,6 +54,7 @@ export class InstallManager {
   private controllers = new Map<string, AbortController>()
   private activeByAsset = new Map<string, string>()
   private emit?: Emit
+  private skillRegistration?: { dispose: () => Promise<void> }
 
   constructor(
     private readonly ctx: Plugin.Context,
@@ -81,7 +82,7 @@ export class InstallManager {
     }
     await this.persistOperations()
     this.snapshot = await this.loadRuntimeSnapshot()
-    await this.ctx.skill.transform((editor) => {
+    this.skillRegistration = await this.ctx.skill.transform((editor) => {
       for (const item of this.snapshot) editor.add(item)
     })
   }
@@ -89,6 +90,7 @@ export class InstallManager {
   async close() {
     for (const controller of this.controllers.values()) controller.abort()
     this.controllers.clear()
+    await this.skillRegistration?.dispose()
   }
 
   handlers() {
@@ -186,7 +188,7 @@ export class InstallManager {
       state: "queued",
       stage: "queued",
       progress: 0,
-      message: idempotencyKey ? "idempotency:" + idempotencyKey : null,
+      message: null,
       error: null,
       createdAt: now(),
       updatedAt: now(),
@@ -210,6 +212,8 @@ export class InstallManager {
     let previous: Installation | undefined
     let previousActive: unknown
     let activeChanged = false
+    let createdVersion = false
+    let committedVersionRoot: string | undefined
 
     try {
       await mkdir(stageRoot, { recursive: true, mode: 0o700 })
@@ -248,6 +252,7 @@ export class InstallManager {
       await this.progress(operation, "committing", 75, "Committing immutable version directory")
       const skillRoot = path.join(this.config.installRoot, "skills", id)
       const versionRoot = path.join(skillRoot, "versions", selected.version)
+      committedVersionRoot = versionRoot
       await mkdir(path.dirname(versionRoot), { recursive: true, mode: 0o700 })
       const manifestPath = path.join(versionRoot, ".store-manifest.json")
 
@@ -269,6 +274,7 @@ export class InstallManager {
           { mode: 0o600 },
         )
         await rename(contentDir, versionRoot)
+        createdVersion = true
       }
 
       const activeFile = path.join(skillRoot, "active.json")
@@ -312,6 +318,8 @@ export class InstallManager {
           : this.installations.filter((item) => item.assetId !== operation.assetId)
         await this.persistInstallations()
         await this.refreshRuntime().catch(() => undefined)
+      } else if (createdVersion && committedVersionRoot) {
+        await rm(committedVersionRoot, { recursive: true, force: true }).catch(() => undefined)
       }
       const cancelled = signal.aborted
       await this.progress(

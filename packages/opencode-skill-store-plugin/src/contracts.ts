@@ -1,4 +1,4 @@
-import { Rpc } from "@opencode/plugin"
+import { Rpc } from "@opencode/plugin/rpc"
 
 const string = { type: "string" } as const
 const boolean = { type: "boolean" } as const
