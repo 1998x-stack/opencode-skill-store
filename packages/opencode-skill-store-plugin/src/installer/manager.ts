@@ -558,8 +558,18 @@ export class InstallManager {
       const versionRoot = path.join(installRoot, "skills", item.runtimeSkillId, "versions", item.version)
       const skillFile = path.join(versionRoot, "SKILL.md")
       try {
+        const resolvedSkillFile = await realpath(skillFile)
+        const relative = path.relative(installRoot, resolvedSkillFile)
+        if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
+          throw new Error("Installed Skill path escapes the managed root")
+        const info = await lstat(skillFile)
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Installed SKILL.md is not a regular file")
+
         if (!/^[a-f0-9]{64}$/i.test(item.sha256)) throw new Error("Persisted installation digest is invalid")
-        const manifest = JSON.parse(await readFile(path.join(versionRoot, ".store-manifest.json"), "utf8")) as {
+        const manifestFile = path.join(versionRoot, ".store-manifest.json")
+        const manifestInfo = await lstat(manifestFile)
+        if (!manifestInfo.isFile() || manifestInfo.isSymbolicLink()) throw new Error("Installed package manifest is not a regular file")
+        const manifest = JSON.parse(await readFile(manifestFile, "utf8")) as {
           assetId?: string
           version?: string
           sha256?: string
@@ -574,12 +584,6 @@ export class InstallManager {
         if (active?.version !== item.version || active.sha256?.toLowerCase() !== item.sha256.toLowerCase())
           await this.atomicJson(activeFile, { version: item.version, sha256: item.sha256, updatedAt: now() })
 
-        const resolvedSkillFile = await realpath(skillFile)
-        const relative = path.relative(installRoot, resolvedSkillFile)
-        if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
-          throw new Error("Installed Skill path escapes the managed root")
-        const info = await lstat(skillFile)
-        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Installed SKILL.md is not a regular file")
         const markdown = await readFile(resolvedSkillFile, "utf8")
         const parsed = parseSkillMarkdown(markdown, {
           name: item.title,
