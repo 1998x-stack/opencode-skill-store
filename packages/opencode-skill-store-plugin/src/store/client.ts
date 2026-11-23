@@ -110,6 +110,11 @@ export class StoreClient {
     })
     if (!response.ok) throw new Error("Skill Store package download failed: HTTP " + response.status)
     if (!response.body) throw new Error("Skill Store returned an empty package body")
+    const declaredBytes = Number(response.headers.get("content-length"))
+    if (Number.isFinite(declaredBytes) && declaredBytes > this.config.maxPackageBytes) {
+      await response.body.cancel().catch(() => undefined)
+      throw new Error("Skill Store package exceeds the configured download size limit")
+    }
     return response
   }
 
@@ -137,8 +142,10 @@ export class StoreClient {
     })
     if (!response.ok) throw new Error("Skill Store API failed: HTTP " + response.status + " (" + url.pathname + ")")
     const declaredBytes = Number(response.headers.get("content-length"))
-    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_JSON_RESPONSE_BYTES)
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_JSON_RESPONSE_BYTES) {
+      await response.body?.cancel().catch(() => undefined)
       throw new Error("Skill Store API response exceeds the 5 MiB metadata limit")
+    }
     if (!response.body) throw new Error("Skill Store API returned an empty response body")
 
     const reader = response.body.getReader()
