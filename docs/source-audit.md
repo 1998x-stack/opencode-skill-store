@@ -16,6 +16,7 @@ OpenCode package version: 2.3.2
 | packages/app/src/runtime/server/api.ts | createApiForServer() wraps OpenCode.make() from @opencode/client/promise. | Use serverSdk.api.rpc(SkillStoreRPC). |
 | packages/plugin/src/promise/rpc.ts | Server Plugin RPC handlers receive input plus { signal, error }; RPC registration returns events and dispose. | Implement one typed RPC surface with durable operation queries and live progress events. |
 | packages/plugin/src/promise/skill.ts | Plugin API exposes ctx.skill.transform() and ctx.skill.reload(). | Register installed Skills through the native Skill Runtime. |
+| packages/core/src/plugin/host.ts | `storage(kv, pluginID)` prefixes keys with the plugin ID only; it does not add `ctx.location`. | Prefix every durable installation/operation key with the explicit Location hash. |
 | packages/schema/src/skill.ts | Skill.Info includes id, name, optional description/autoinvoke, absolute path and Markdown content. | Keep the extracted directory and point Runtime path at the installed SKILL.md. |
 | packages/app/src/runtime/i18n/en.ts | English translations are centralized in the app dictionary. | Add localized labels rather than hardcoding visible UI copy. |
 
@@ -24,10 +25,11 @@ OpenCode package version: 2.3.2
 OpenCode Server Plugin documentation says ctx.location describes the Location where the plugin instance is loaded. It includes directory, optional workspaceID, and project metadata; it is not the location of every session/event.
 
 Therefore:
-- Store installation records are scoped to the Plugin Location.
-- The install root includes a stable hash of ctx.location.directory.
-- Web event listeners filter RPC events by event.location.directory.
-- Switching project/Location must not leak one Location's installation list into another.
+- Plugin instances and Skill Runtime transforms are Location-aware, but `ctx.storage` is only plugin-ID namespaced by the host implementation.
+- The install root includes a stable hash of `ctx.location.directory` and optional `workspaceID`.
+- Durable keys must independently include the same Location hash (for example, `location:v1:<hash>:installations`); `ctx.storage` does not provide this isolation automatically.
+- Web event listeners currently filter by `event.location.directory`; workspace-aware filtering remains a follow-up where multiple workspace IDs can share a directory.
+- A two-Location integration test must share the same underlying plugin KV store to prove that records do not cross boundaries.
 
 This refines the earlier server-global installation assumption.
 
