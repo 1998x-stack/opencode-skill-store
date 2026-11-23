@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
+import { lstat, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
@@ -54,6 +54,9 @@ export class InstallManager {
   private controllers = new Map<string, AbortController>()
   private activeByAsset = new Map<string, string>()
   private jobs = new Map<string, Promise<void>>()
+  private mutationQueue: Promise<void> = Promise.resolve()
+  private installationWrite: Promise<void> = Promise.resolve()
+  private operationWrite: Promise<void> = Promise.resolve()
   private emit?: Emit
   private skillRegistration?: { dispose: () => Promise<void> }
 
@@ -67,11 +70,49 @@ export class InstallManager {
     this.emit = emit
   }
 
+  private async withMutation<T>(task: () => Promise<T>): Promise<T> {
+    const previous = this.mutationQueue
+    let release!: () => void
+    this.mutationQueue = new Promise<void>((resolve) => { release = resolve })
+    await previous
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
+
   async initialize() {
     await mkdir(path.join(this.config.installRoot, "skills"), { recursive: true, mode: 0o700 })
     await mkdir(path.join(this.config.installRoot, "staging"), { recursive: true, mode: 0o700 })
-    this.installations = asArray<Installation>(await this.ctx.storage.get("installations"))
-    this.operations = asArray<Operation>(await this.ctx.storage.get("operations"))
+    this.installations = asArray<unknown>(await this.ctx.storage.get("installations"))
+      .map(asRecord)
+      .filter((item) =>
+        typeof item.installationId === "string" &&
+        typeof item.assetId === "string" &&
+        typeof item.runtimeSkillId === "string" &&
+        typeof item.title === "string" &&
+        typeof item.version === "string" &&
+        typeof item.sha256 === "string" &&
+        typeof item.enabled === "boolean" &&
+        typeof item.installedAt === "string",
+      )
+      .map((item) => ({
+        ...item,
+        description: typeof item.description === "string" ? item.description : String(item.title),
+        pinnedVersion: typeof item.pinnedVersion === "string" ? item.pinnedVersion : null,
+        status: item.status === "broken" || item.status === "cleanup_pending" ? item.status : "installed",
+      })) as Installation[]
+    this.operations = asArray<unknown>(await this.ctx.storage.get("operations"))
+      .map(asRecord)
+      .filter((item) =>
+        typeof item.operationId === "string" &&
+        typeof item.assetId === "string" &&
+        typeof item.title === "string" &&
+        typeof item.version === "string" &&
+        typeof item.state === "string",
+      )
+      .map((item) => ({ ...item, idempotencyKey: typeof item.idempotencyKey === "string" ? item.idempotencyKey : null })) as Operation[]
 
     for (const operation of this.operations) {
       if (ACTIVE_STATES.has(operation.state)) {
@@ -126,7 +167,7 @@ export class InstallManager {
         controller.abort()
         return { cancelled: true }
       },
-      installationSetEnabled: async (input: unknown) => {
+      installationSetEnabled: async (input: unknown) => this.withMutation(async () => {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
         this.requireIdle(item.assetId)
@@ -143,16 +184,16 @@ export class InstallManager {
         }
         await this.publishInstallation(item, item.enabled ? "enabled" : "disabled")
         return { item }
-      },
-      installationPin: async (input: unknown) => {
+      }),
+      installationPin: async (input: unknown) => this.withMutation(async () => {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
         this.requireIdle(item.assetId)
         item.pinnedVersion = typeof request.version === "string" ? request.version : null
         await this.persistInstallations()
         return { item }
-      },
-      installationUninstall: async (input: unknown) => {
+      }),
+      installationUninstall: async (input: unknown) => this.withMutation(async () => {
         const id = String(asRecord(input).installationId ?? "")
         const item = this.requireInstallation(id)
         this.requireIdle(item.assetId)
@@ -170,7 +211,7 @@ export class InstallManager {
         }
         await this.publishInstallation(item, "uninstalled")
         return { removed: true }
-      },
+      }),
       updateCheck: async () => {
         const updates: Array<{ installationId: string; assetId: string; currentVersion: string; latestVersion: string }> = []
         for (const item of this.installations) {
@@ -241,7 +282,11 @@ export class InstallManager {
     return { operationId, state: operation.state }
   }
 
-  private async runInstall(operation: Operation, requestedVersion: string | undefined, signal: AbortSignal) {
+  private runInstall(operation: Operation, requestedVersion: string | undefined, signal: AbortSignal) {
+    return this.withMutation(() => this.runInstallTransaction(operation, requestedVersion, signal))
+  }
+
+  private async runInstallTransaction(operation: Operation, requestedVersion: string | undefined, signal: AbortSignal) {
     const stageRoot = operationPath(this.config.installRoot, operation.operationId)
     const zipFile = path.join(stageRoot, "package.zip")
     const contentDir = path.join(stageRoot, "content")
@@ -252,9 +297,10 @@ export class InstallManager {
     let committedVersionRoot: string | undefined
 
     try {
+      signal.throwIfAborted()
       await mkdir(stageRoot, { recursive: true, mode: 0o700 })
       await this.progress(operation, "resolving", 5, "Resolving asset and package metadata")
-      const detail = await this.store.detail(operation.assetId)
+      const detail = await this.store.detail(operation.assetId, signal)
       signal.throwIfAborted()
       if (detail.asset.assetId !== operation.assetId) throw new Error("Skill Store detail returned a different asset ID")
       if (detail.asset.kind.toLowerCase() !== "skill") throw new Error("Only Skill assets can be installed in the OpenCode Skill Runtime")
