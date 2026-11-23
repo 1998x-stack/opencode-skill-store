@@ -9,6 +9,7 @@ import type { Entry, ZipFile } from "yauzl"
 export type ArchiveLimits = {
   maxEntries: number
   maxUnpackedBytes: number
+  maxSkillFileBytes: number
   maxCompressionRatio: number
 }
 
@@ -129,6 +130,7 @@ export async function extractSkillArchive(filename: string, destination: string,
     const skillFile = path.join(destination, "SKILL.md")
     const info = await stat(skillFile)
     if (!info.isFile() || info.size === 0) throw new Error("ZIP root must contain a non-empty SKILL.md")
+    if (info.size > limits.maxSkillFileBytes) throw new Error("SKILL.md exceeds the configured size limit")
     return { skillFile, entries, unpackedBytes: totalBytes }
   } catch (error) {
     zip.close()
