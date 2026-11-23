@@ -109,7 +109,7 @@ describe("StoreClient", () => {
           packages: [{ package_id: "pkg", version: "1.0.0", size_bytes: 10, sha256: "a".repeat(64) }],
         }],
       },
-    })) as typeof fetch
+    })) as unknown as typeof fetch
     const result = await new StoreClient(config).detail("research")
     expect(result.asset.kind).toBe("")
     expect(result.versions[0].packages[0].platform).toBe("")
