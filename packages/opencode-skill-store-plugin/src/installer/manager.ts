@@ -113,7 +113,7 @@ export class InstallManager {
         return this.store.detail(String(request.assetId ?? ""))
       },
       installationList: async () => ({ items: this.installations }),
-      operationList: async () => ({ items: this.operations.slice(-30).toReversed() }),
+      operationList: async () => ({ items: this.operations.slice(-30).reverse() }),
       installStart: async (input: unknown) => this.start(input as InstallRequest),
       operationGet: async (input: unknown) => {
         const id = String(asRecord(input).operationId ?? "")
@@ -265,7 +265,7 @@ export class InstallManager {
 
       const id = runtimeID(operation.assetId)
       previous = this.installations.find((item) => item.assetId === operation.assetId)
-      const existingRuntime = (await this.ctx.skill.list()).find((item) => item.id === id)
+      const existingRuntime = (await this.ctx.skill.list()).data.find((item) => item.id === id)
       if (existingRuntime && !previous) throw new Error("Runtime Skill ID conflict: " + id)
 
       await this.progress(operation, "downloading", 20, "Downloading package")
@@ -341,7 +341,7 @@ export class InstallManager {
 
       await this.progress(operation, "registering", 90, "Registering Skill in OpenCode Runtime")
       await this.refreshRuntime()
-      const registered = (await this.ctx.skill.list()).some((skill) => skill.id === id)
+      const registered = (await this.ctx.skill.list()).data.some((skill) => skill.id === id)
       if (item.enabled && !registered) throw new Error("RUNTIME_REGISTER_FAILED: Skill Runtime did not expose " + id)
 
       await this.progress(operation, "installed", 100, "Skill installed and verified in Runtime", "installed")
