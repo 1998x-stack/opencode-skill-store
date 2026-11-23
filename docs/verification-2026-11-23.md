@@ -57,3 +57,14 @@ The existing App unit suite passed after the new UI changes, including explicit 
 ## Release gate
 
 Do **not** declare production readiness or merge these draft PRs until the live Go Store contract, browser E2E, Runtime invocation and relevant authorization controls are validated. A CI green state proves the checks listed above, not undisclosed private deployment behavior.
+
+
+## Location storage isolation follow-up — 2026-11-24
+
+- Fix commit: `48c9ff91fce509ff49cac320785a12538b81ffea`.
+- GitHub Actions: [push run 45218052511](https://github.com/1998x-stack/opencode-skill-store/actions/runs/45218052511) and [PR run 45218035728](https://github.com/1998x-stack/opencode-skill-store/actions/runs/45218035728) — both **success**.
+- TypeScript typecheck: success.
+- `bun test`: **55 tests passed, 0 failed** across 5 files.
+- Added a regression test that creates two plugin managers over one shared storage Map, using the same directory and different workspace IDs. It verifies separate installation/operation records and separate `location:v1:<hash>:` keys.
+- This closes the previously identified mismatch: OpenCode Host storage is plugin-ID namespaced, so Location isolation must be explicit in each key.
+- This is CI evidence only; no local server, real Go Store, browser E2E, or live Agent invocation is claimed.
