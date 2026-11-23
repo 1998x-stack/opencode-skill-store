@@ -221,7 +221,7 @@ export class InstallManager {
         for (const item of this.installations) {
           if (item.pinnedVersion) continue
           const detail = await this.store.detail(item.assetId)
-          const latest = detail.asset.latestVersion ?? detail.versions[0]?.version
+          const latest = detail.asset.latestVersion
           if (latest && latest !== item.version) {
             updates.push({
               installationId: item.installationId,
@@ -478,7 +478,7 @@ export class InstallManager {
   }
 
   private selectVersion(detail: AssetDetail, requested?: string) {
-    const version = requested ?? detail.asset.latestVersion ?? detail.versions[0]?.version
+    const version = requested ?? detail.asset.latestVersion
     if (!version || !/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(version)) throw new Error("Skill Store returned an unsafe version identifier")
     const selected = detail.versions.find((item) => item.version === version)
     if (!selected) throw new Error("Requested version is not available in Skill Store")
@@ -486,12 +486,19 @@ export class InstallManager {
   }
 
   private selectPackage(packages: PackageInfo[], version: string) {
-    const exact = packages.find((item) => item.version === version &&
+    const compatible = packages.filter((item) =>
+      item.version === version &&
       (item.platform === process.platform || item.platform === "any") &&
-      (item.arch === process.arch || item.arch === "any"))
-    if (!exact) throw new Error("No Skill Store package for this version matches the OpenCode Server platform")
-    if (!exact.packageId.trim()) throw new Error("Skill Store package ID is empty")
-    return exact
+      (item.arch === process.arch || item.arch === "any"),
+    )
+    compatible.sort((left, right) => {
+      const score = (item: PackageInfo) => Number(item.platform === process.platform) + Number(item.arch === process.arch)
+      return score(right) - score(left)
+    })
+    const selected = compatible[0]
+    if (!selected) throw new Error("No Skill Store package for this version matches the OpenCode Server platform")
+    if (!selected.packageId.trim()) throw new Error("Skill Store package ID is empty")
+    return selected
   }
 
   private async downloadToFile(response: Response, filename: string, signal: AbortSignal) {
