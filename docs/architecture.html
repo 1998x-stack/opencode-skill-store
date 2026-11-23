@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>OpenCode Web × Skill Store｜核心技术架构</title>
+<style>
+:root{--ink:#1d3438;--muted:#61777a;--teal:#147e7d;--teal2:#e7f4f1;--coral:#c86d4d;--coral2:#fff0e8;--violet:#6f61b7;--violet2:#f0edfa;--gold:#9c752d;--gold2:#fff5df;--line:#dce6e2;--paper:#fbfcfa;--white:#fff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.75 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+header{background:linear-gradient(125deg,#17383d,#21585a 65%,#286c68);color:white;padding:58px max(24px,calc((100vw - 1120px)/2)) 48px}
+.kicker{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#a7d9cf;font-weight:700}
+h1{font-size:clamp(32px,5vw,54px);line-height:1.15;margin:14px 0 12px;max-width:850px}
+.subtitle{font-size:18px;color:#d3e5df;max-width:820px}
+.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}.meta span{border:1px solid #6d9992;border-radius:99px;padding:5px 12px;font-size:12px;color:#e1f0ec}
+.layout{max-width:1180px;margin:0 auto;padding:34px 24px;display:grid;grid-template-columns:245px minmax(0,1fr);gap:36px}
+nav{position:sticky;top:20px;align-self:start;border:1px solid var(--line);border-radius:14px;background:white;padding:18px;max-height:calc(100vh - 40px);overflow:auto}
+nav b{display:block;font-size:12px;color:var(--muted);margin-bottom:10px;letter-spacing:.08em}
+nav a{display:block;color:#486267;text-decoration:none;font-size:13px;padding:5px 7px;border-radius:7px}
+nav a:hover{background:var(--teal2);color:var(--teal)}
+main{min-width:0}
+section{background:white;border:1px solid var(--line);border-radius:16px;padding:26px 30px;margin-bottom:22px;box-shadow:0 5px 20px #193b3a08;scroll-margin-top:20px}
+h2{font-size:23px;line-height:1.35;margin:0 0 16px;color:#17383d}
+h3{font-size:16px;margin:22px 0 8px;color:var(--teal)}
+p{margin:8px 0 12px}ul,ol{padding-left:22px}li{margin:5px 0}
+.lead{font-size:17px;color:#405d60}
+.callout{border-left:4px solid var(--teal);background:var(--teal2);padding:13px 16px;border-radius:0 10px 10px 0;margin:16px 0}
+.warning{border-left-color:var(--coral);background:var(--coral2)}
+.note{border-left-color:var(--violet);background:var(--violet2)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
+.tile strong{display:block;color:var(--teal);margin-bottom:4px}
+.diagram{background:#f5faf8;border:1px solid var(--line);border-radius:14px;padding:18px;overflow:auto}
+.arch{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;min-width:600px}
+.node{border:1px solid;border-radius:11px;padding:13px;text-align:center;background:white}
+.node b{display:block;font-size:14px}.node small{display:block;color:var(--muted);margin-top:5px}
+.n-web{border-color:var(--teal);background:var(--teal2)}.n-plugin{border-color:var(--coral);background:var(--coral2)}.n-store{border-color:var(--violet);background:var(--violet2)}
+.arrow{text-align:center;color:var(--muted);font-size:22px;line-height:1.2}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0}
+th{background:#1b4144;color:white;text-align:left;font-weight:600}
+td,th{border:1px solid var(--line);padding:9px 10px;vertical-align:top}
+tr:nth-child(even) td{background:#f7faf8}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eff4f2;padding:2px 5px;border-radius:4px;font-size:.9em;overflow-wrap:anywhere}
+pre{background:#18383d;color:#e4f0ed;padding:16px;border-radius:11px;overflow:auto;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}
+.badge{display:inline-block;border-radius:99px;padding:2px 9px;background:var(--teal2);color:var(--teal);font-size:11px;font-weight:700}
+.badge.warn{background:var(--coral2);color:var(--coral)}
+footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+@media(max-width:850px){.layout{grid-template-columns:1fr}nav{position:relative;top:0;max-height:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}
+@media print{body{background:white;font-size:10pt}.layout{display:block;max-width:none;padding:0 12mm}nav{display:none}header{padding:18mm 15mm 12mm;break-after:page}section{box-shadow:none;border:0;border-radius:0;padding:8mm 0;margin:0;break-inside:avoid}h2{break-after:avoid}.diagram,pre,table{break-inside:avoid}footer{padding:10mm 12mm}.tile{break-inside:avoid}a{color:inherit;text-decoration:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="kicker">Engineering Blueprint · 2026-11-23</div>
+  <h1>OpenCode Web × Skill Store</h1>
+  <div class="subtitle">原生 Skills 管理体验、Server Plugin、Typed RPC、Go Store Adapter、事务化安装器与 Skill Runtime 验收</div>
+  <div class="meta"><span>核心 MVP 技术方案</span><span>OpenCode 2.3.2 Fork</span><span>Location-scoped</span><span>Design v0.2</span></div>
+</header>
+<div class="layout">
+<nav>
+  <b>ON THIS PAGE</b>
+  <a href="#decision">01 架构决策</a><a href="#web">02 Web 原生接入</a><a href="#plugin">03 Server Plugin</a>
+  <a href="#rpc">04 Typed RPC</a><a href="#store">05 Go Store Adapter</a><a href="#package">06 Skill Package</a>
+  <a href="#install">07 安装事务</a><a href="#security">08 ZIP 安全</a><a href="#location">09 Location 隔离</a>
+  <a href="#test">10 测试与验收</a><a href="#deploy">11 本地部署</a><a href="#open">12 待核验事项</a>
+</nav>
+<main>
+<section id="decision">
+  <h2>01 · 架构决策</h2>
+  <p class="lead">将 Skill Store 变成 OpenCode 原生 Skills 页面的一部分，而不是把一个独立网站嵌进 OpenCode。</p>
+  <div class="diagram">
+    <div class="arch">
+      <div class="node n-web"><b>OpenCode Web</b><small>Settings → Extensions → Skills<br>Discover / Installed / Detail</small></div>
+      <div class="node n-plugin"><b>OpenCode Server Plugin</b><small>Typed RPC · Store Client<br>Installer · Operation State</small></div>
+      <div class="node n-store"><b>Go Skill Store</b><small>Catalog · Version · Package<br>SQLite metadata · ZIP object</small></div>
+    </div>
+    <div class="arrow">Web RPC → Server Plugin → Go Store</div>
+    <div class="arch">
+      <div class="node"><b>Location Install Root</b><small>staging / versions / active.json</small></div>
+      <div class="node n-web"><b>Skill Runtime</b><small>ctx.skill.transform()<br>ctx.skill.reload()</small></div>
+      <div class="node"><b>Agent Session</b><small>@ss-skill-id<br>SKILL.md + supporting files</small></div>
+    </div>
+  </div>
+  <div class="callout"><strong>关键边界：</strong>浏览器只传 asset_id、version 和 idempotency_key。API Key、下载、SHA 校验、解压、磁盘写入和 Runtime 注册都留在 OpenCode Server。</div>
+  <div class="grid">
+    <div class="tile"><strong>原生 UI</strong>扩展已有 Skills subtab，不新增 iframe、外部壳站或重复导航。</div>
+    <div class="tile"><strong>复用 Runtime</strong>通过 Server Plugin 的 Skill transform API 注入，不再造第二套 Skill loader。</div>
+    <div class="tile"><strong>事务安装</strong>版本目录不可变，active.json 原子切换，失败恢复旧版本。</div>
+    <div class="tile"><strong>Location 隔离</strong>安装状态属于当前 OpenCode Location，不跨项目泄漏。</div>
+  </div>
+</section>
+<section id="web">
+  <h2>02 · OpenCode Web 原生接入</h2>
+  <p>源码审计发现当前 Fork 已有 Settings → Extensions → Skills。现有页面从 Location Skill Registry 读取 Skill 列表，因此本方案扩展它，而不是再加一条 /skills 路由。</p>
+  <table><tr><th>模块</th><th>修改职责</th></tr>
+  <tr><td><code>settings/providers/extensions.tsx</code></td><td>在已有 Skills 列表后嵌入 Store 面板。</td></tr>
+  <tr><td><code>settings/providers/skill-store.tsx</code></td><td>Discover、Installed、搜索、详情、安装、更新、启停、卸载和操作进度。</td></tr>
+  <tr><td><code>settings/providers/skill-store-rpc.ts</code></td><td>定义 Web Client 使用的 JSON Schema RPC Contract。</td></tr>
+  <tr><td><code>runtime/i18n/en.ts</code></td><td>集中维护 UI 文案。</td></tr></table>
+  <h3>当前 Server Client</h3>
+  <pre>const rpc = () => serverSdk.api.rpc(SkillStoreRPC)
+const result = await rpc().catalogSearch({ query, limit: 24 })</pre>
+  <p>不要长期缓存旧 SDK Client。Server reconnect 时 API transport 可能变化。RPC 事件带 location，前端按 event.location.directory 过滤。</p>
+</section>
+<section id="plugin">
+  <h2>03 · Server Plugin 模块</h2>
+  <table><tr><th>模块</th><th>职责</th></tr>
+  <tr><td><code>config.ts</code></td><td>环境变量、插件 options、Location hash 安装根目录、大小限制。</td></tr>
+  <tr><td><code>contracts.ts</code></td><td>RPC schemas 与 DTO。</td></tr>
+  <tr><td><code>store/client.ts</code></td><td>Go Store 认证、HTTP 请求、字段归一化、包下载。</td></tr>
+  <tr><td><code>installer/manager.ts</code></td><td>操作状态机、幂等、并发、持久化、更新、回滚。</td></tr>
+  <tr><td><code>installer/archive.ts</code></td><td>ZIP 路径、文件类型、entry 数量、压缩比和解压限制。</td></tr>
+  <tr><td><code>runtime/frontmatter.ts</code></td><td>解析 SKILL.md frontmatter 和正文。</td></tr>
+  <tr><td><code>index.ts</code></td><td>Plugin lifecycle、RPC 注册、cleanup。</td></tr></table>
+  <p>插件加载时读取 durable state、恢复 operation、注册 Skill transform；卸载时 dispose RPC、停止后台操作并释放 transform。</p>
+</section>
+<section id="rpc">
+  <h2>04 · Typed RPC</h2>
+  <table><tr><th>Method</th><th>用途</th></tr>
+  <tr><td><code>catalogSearch</code> / <code>catalogDetail</code></td><td>目录搜索和详情。</td></tr>
+  <tr><td><code>installationList</code></td><td>当前 Location 安装列表。</td></tr>
+  <tr><td><code>operationList</code> / <code>operationGet</code></td><td>页面刷新和断线恢复。</td></tr>
+  <tr><td><code>installStart</code> / <code>operationCancel</code></td><td>异步安装或更新、显式取消。</td></tr>
+  <tr><td><code>installationSetEnabled</code> / <code>installationPin</code></td><td>启停与版本固定。</td></tr>
+  <tr><td><code>installationUninstall</code> / <code>updateCheck</code></td><td>卸载和更新检查。</td></tr></table>
+  <div class="callout note">RPC events 是 live-only。持久化 operation 状态才是事实来源；刷新页面后重新调用 operationList 和 installationList。</div>
+</section>
+<section id="store">
+  <h2>05 · Go Skill Store Adapter</h2>
+  <p><span class="badge warn">待本地核验</span> 当前集成仓库没有 Go Store 后端源码。默认路由是候选路径，不应被当成已验证事实。</p>
+  <pre>GET /v1/asset-store/assets?kind=skill&amp;q=&amp;limit=&amp;cursor=
+GET /v1/asset-store/assets/{asset_id}
+GET /v1/asset-store/packages/{package_id}/content</pre>
+  <p>真实 Router/OpenAPI 必须确认分页、资产字段、版本结构、包元数据、认证头和二进制下载行为。路径可通过环境变量覆盖。</p>
+</section>
+<section id="package">
+  <h2>06 · Skill Package 契约</h2>
+  <pre>skill-package.zip
+├── SKILL.md
+├── references/
+├── scripts/
+├── assets/
+└── examples/</pre>
+  <p>ZIP 根目录直接包含非空 SKILL.md。Supporting files 保留相对目录。Runtime ID 使用稳定 Store namespace：<code>ss-&lt;asset-slug&gt;-&lt;hash&gt;</code>。</p>
+  <p>Runtime Info 由 id、name、description、autoinvoke、absolute SKILL.md path 和 Markdown body 组成。插件调用 ctx.skill.transform() 注册，外部状态变化后调用 ctx.skill.reload()。</p>
+</section>
+<section id="install">
+  <h2>07 · 安装事务</h2>
+  <ol>
+    <li>Resolve：获取资产详情、目标版本和 package metadata。</li>
+    <li>Download：流式写入 staging，同时计算 SHA-256 和字节数。</li>
+    <li>Verify：摘要、长度、平台、架构和包结构校验。</li>
+    <li>Extract：拒绝不安全 entry，解压到 staging/content。</li>
+    <li>Commit：写不可变 versions/&lt;version&gt;，原子切换 active.json。</li>
+    <li>Register：ctx.skill.reload()，再用 ctx.skill.list() 验证。</li>
+    <li>Complete：持久化 operation=installed，发送进度事件。</li>
+  </ol>
+  <div class="callout warning">Runtime 注册失败时恢复旧 active.json 和旧安装记录。旧版本不能在新版本验证前删除。相同 asset/version 对应不同 SHA 必须拒绝。</div>
+</section>
+<section id="security">
+  <h2>08 · ZIP 与供应链安全</h2>
+  <ul>
+    <li>拒绝绝对路径、..、反斜杠、盘符、UNC、NUL、冒号路径段和 Windows 保留设备名。</li>
+    <li>拒绝符号链接、硬链接和特殊文件。</li>
+    <li>拒绝重复 entry、大小写冲突、ZIP Bomb 和超限文件。</li>
+    <li>只写入 staging，限制包大小、解压总量、entry 数和压缩比。</li>
+    <li>不保留 setuid/setgid，不在安装时执行 scripts。</li>
+    <li>卸载前验证路径仍在本插件 installRoot 内。</li>
+  </ul>
+  <p>SHA-256 只能验证字节完整性；发布者身份认证需要后续签名 manifest 和可信公钥。</p>
+</section>
+<section id="location">
+  <h2>09 · Location 隔离</h2>
+  <p>当前 OpenCode Plugin 的 ctx.location 表示插件实例加载的 Location。安装目录按 ctx.location.directory 计算稳定 hash：</p>
+  <pre>$OPENCODE_SKILL_STORE_DIR/&lt;location-hash&gt;/
+  skills/&lt;runtime-id&gt;/
+    active.json
+    versions/&lt;version&gt;/SKILL.md
+  staging/&lt;operation-id&gt;/</pre>
+  <p>Server 和 Location 是两个维度。相同 Server 的不同项目也可能有不同安装状态。真正 Server-global 共享需要显式 scope、全局锁和跨 Location reload 通知，不可简单共享一个目录。</p>
+</section>
+<section id="test">
+  <h2>10 · 测试与验收</h2>
+  <div class="grid">
+    <div class="tile"><strong>Unit</strong>ZIP path、frontmatter、Store DTO、digest、state machine。</div>
+    <div class="tile"><strong>Integration</strong>Fake Store、真实 ZIP、401/404/429/500、截断下载、磁盘失败。</div>
+    <div class="tile"><strong>E2E</strong>Discover → Detail → Install → Installed → Update → Disable → Uninstall。</div>
+    <div class="tile"><strong>Runtime proof</strong>ctx.skill.list() 出现 ID；Session 输入 @ss-id；Agent 读取 supporting file。</div>
+  </div>
+  <p>测试状态必须以实际执行命令和退出码为准。本报告不将未执行测试标记为通过。</p>
+</section>
+<section id="deploy">
+  <h2>11 · 本地部署</h2>
+  <pre># OpenCode Fork
+bun install
+bun run check
+bun run dev --port 4096
+
+# Web
+bun run dev:web
+
+# Plugin
+cd packages/opencode-skill-store-plugin
+bun install
+bun test
+bun run typecheck</pre>
+  <p>在 OpenCode Server 进程设置 SKILL_STORE_BASE_URL、SKILL_STORE_API_KEY。把本地 Plugin 路径添加到 opencode.jsonc，重启 Server 后打开 Settings → Extensions → Skills。</p>
+</section>
+<section id="open">
+  <h2>12 · 待核验事项</h2>
+  <ul>
+    <li>真实 Go Store Router/OpenAPI 路径、认证头和响应 DTO。</li>
+    <li>真实 ZIP 包是否以 SKILL.md 为根入口。</li>
+    <li>本地 OpenCode Fork commit 与 Plugin API 版本是否一致。</li>
+    <li>Server 运行用户对 installRoot 的持久写权限。</li>
+    <li>目标机 Bun typecheck、单元测试、E2E 和真实 Agent 调用结果。</li>
+  </ul>
+  <div class="callout">P0 成功标准：用户从 OpenCode Web 安装一个真实 Store Skill，并在当前 Location 的 Session 中通过 @ss-id 加载它，同时成功读取 references 下的 supporting file。</div>
+</section>
+</main>
+</div>
+<footer>OpenCode Web × Skill Store · Core Technical Architecture · 2026-11-23 · Generated from the implementation design and source audit.</footer>
+</body>
+</html>

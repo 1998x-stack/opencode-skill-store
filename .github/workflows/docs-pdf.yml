@@ -1,0 +1,42 @@
+name: Generate Architecture PDF
+
+on:
+  push:
+    branches: [skill-store-mvp]
+    paths:
+      - "docs/architecture.html"
+      - "scripts/render-pdf.mjs"
+      - ".github/workflows/docs-pdf.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: skill-store-mvp
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Render PDF
+        run: node scripts/render-pdf.mjs
+      - name: Commit PDF
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture.pdf
+          if git diff --cached --quiet; then
+            echo "PDF is unchanged"
+            exit 0
+          fi
+          git commit -m "docs: publish architecture PDF [skip ci]"
+          git push origin HEAD:skill-store-mvp
