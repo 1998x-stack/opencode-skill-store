@@ -2,7 +2,7 @@
 
 ## 1. Current status
 
-The source files and test cases are committed, but this task environment cannot clone GitHub repositories over the container network. Therefore no local Bun typecheck, unit test, Playwright run, or real Agent invocation is claimed as passed. Run the commands below on the target machine and attach their outputs to feedback/.
+The source files and tests are committed. GitHub Actions has executed the plugin typecheck and 55 tests successfully on the latest Location-isolation commit; this document does not claim a local Bun run, Playwright run, or real Agent invocation. Run those checks on the target machine and attach their outputs to feedback/.
 
 ## 2. Server Plugin unit tests
 
@@ -14,18 +14,19 @@ bun test
 bun run typecheck
 ~~~
 
-Covered:
-- safe ZIP path resolution and rejection of traversal, absolute paths, Windows drive/UNC, reserved names, alternate data streams.
-- SKILL.md frontmatter parsing, metadata fallback and opencode/autoinvoke.
+Covered in current CI:
+- ZIP path containment, traversal, absolute paths, Windows drive/UNC, reserved names, alternate data streams and duplicate paths.
+- ZIP extraction, symlink/special-file rejection, encrypted entries, entry count, unpacked-size and SKILL.md limits.
+- frontmatter parsing and Store metadata fallback.
+- Store HTTP normalization, origin/redirect controls, credential handling, response limits and cancellation.
+- installer SHA/size checks, immutable version conflicts, rollback after Runtime reload failure, interrupted-operation recovery, idempotency, enable/disable/uninstall and persistence failures.
+- Location isolation regression: two plugin instances share one underlying storage Map but use the same directory with different workspaceIDs; installation and operation records remain separate.
 
-Add before production:
-- real ZIP fixture extraction test with symlink and duplicate entries.
-- package digest mismatch test.
-- oversized / compression bomb test.
-- immutable version conflict test.
-- failed Runtime reload rollback test.
-- interrupted operation recovery test.
-- concurrent same-asset install test.
+Remaining before production:
+- actual Go Store Router/OpenAPI contract and auth behavior.
+- live browser E2E against an OpenCode Server with the plugin loaded.
+- real Store package download and real Agent Runtime invocation.
+- process-level crash/fault tests, including disk-full and cancellation race boundaries.
 
 ## 3. OpenCode Fork checks
 
@@ -64,6 +65,7 @@ Scenario:
 8. Disable and enable; verify Runtime list changes.
 9. Uninstall; verify Runtime ID disappears and only the plugin-managed directory is removed.
 10. Switch to another Location; verify the first Location's installation does not appear.
+11. Reuse the same directory with a different workspaceID; verify durable installations and operations remain separate even though both plugin instances share the Host plugin-ID storage namespace.
 
 ## 6. Runtime proof
 
