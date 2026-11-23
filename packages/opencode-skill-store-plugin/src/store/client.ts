@@ -98,7 +98,7 @@ export class StoreClient {
     const url = this.url(this.config.packageContentPath.replace("{id}", encodeURIComponent(packageId)))
     const response = await fetch(url, {
       method: "GET",
-      headers: this.headers(),
+      headers: this.headers("application/zip, application/octet-stream"),
       signal,
       redirect: "error",
     })
@@ -112,8 +112,8 @@ export class StoreClient {
     return new URL(route, this.config.baseUrl)
   }
 
-  private headers() {
-    const headers = new Headers({ accept: "application/json" })
+  private headers(accept = "application/json") {
+    const headers = new Headers({ accept })
     if (this.config.apiKey) headers.set(this.config.apiKeyHeader, this.config.apiKeyPrefix + this.config.apiKey)
     return headers
   }
