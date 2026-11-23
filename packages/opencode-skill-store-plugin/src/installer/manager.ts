@@ -608,11 +608,17 @@ export class InstallManager {
   }
 
   private async persistInstallations() {
-    await this.ctx.storage.set("installations", this.installations)
+    const snapshot = structuredClone(this.installations)
+    const write = this.installationWrite.then(() => this.ctx.storage.set("installations", snapshot))
+    this.installationWrite = write.catch(() => undefined)
+    await write
   }
 
   private async persistOperations() {
     this.operations = this.operations.slice(-100)
-    await this.ctx.storage.set("operations", this.operations)
+    const snapshot = structuredClone(this.operations)
+    const write = this.operationWrite.then(() => this.ctx.storage.set("operations", snapshot))
+    this.operationWrite = write.catch(() => undefined)
+    await write
   }
 }
