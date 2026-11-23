@@ -15,6 +15,7 @@ import { StoreClient } from "../store/client.js"
 type Emit = (name: "operationProgress" | "installationChanged", data: Record<string, unknown>) => Promise<void>
 
 type InstallRequest = { assetId: string; version?: string; idempotencyKey?: string }
+type RuntimeSkill = Skill.Info
 
 const ACTIVE_STATES = new Set(["queued", "running"])
 
@@ -49,7 +50,7 @@ function operationPath(root: string, id: string) {
 export class InstallManager {
   private installations: Installation[] = []
   private operations: Operation[] = []
-  private snapshot: Array<ReturnType<typeof this.runtimeInfo>> = []
+  private snapshot: RuntimeSkill[] = []
   private controllers = new Map<string, AbortController>()
   private activeByAsset = new Map<string, string>()
   private emit?: Emit
@@ -168,7 +169,7 @@ export class InstallManager {
     if (!input.assetId) throw new Error("assetId is required")
     const idempotencyKey = input.idempotencyKey
     if (idempotencyKey) {
-      const previous = this.operations.find((item) => item.message === "idempotency:" + idempotencyKey)
+      const previous = this.operations.find((item) => item.idempotencyKey === idempotencyKey)
       if (previous) return { operationId: previous.operationId, state: previous.state }
     }
     const active = this.activeByAsset.get(input.assetId)
@@ -177,6 +178,7 @@ export class InstallManager {
     const operationId = "op_" + randomUUID()
     const operation: Operation = {
       operationId,
+      idempotencyKey: idempotencyKey ?? null,
       assetId: input.assetId,
       title: input.assetId,
       version: input.version ?? "latest",
@@ -255,6 +257,12 @@ export class InstallManager {
         await rm(contentDir, { recursive: true, force: true })
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+        try {
+          await readFile(path.join(versionRoot, "SKILL.md"))
+          throw new Error("VERSION_IMMUTABLE: existing version has no trusted package manifest")
+        } catch (existing) {
+          if ((existing as NodeJS.ErrnoException).code !== "ENOENT") throw existing
+        }
         await writeFile(
           path.join(contentDir, ".store-manifest.json"),
           JSON.stringify({ assetId: operation.assetId, version: selected.version, packageId: pkg.packageId, sha256: downloaded.sha256 }),
@@ -321,6 +329,7 @@ export class InstallManager {
 
   private selectVersion(detail: AssetDetail, requested?: string) {
     const version = requested ?? detail.asset.latestVersion ?? detail.versions[0]?.version
+    if (!version || !/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(version)) throw new Error("Skill Store returned an unsafe version identifier")
     const selected = detail.versions.find((item) => item.version === version)
     if (!selected) throw new Error("Requested version is not available in Skill Store")
     return selected
@@ -390,7 +399,7 @@ export class InstallManager {
     return result
   }
 
-  private runtimeInfo(id: string, skillFile: string, parsed: ReturnType<typeof parseSkillMarkdown>) {
+  private runtimeInfo(id: string, skillFile: string, parsed: ReturnType<typeof parseSkillMarkdown>): RuntimeSkill {
     return {
       id: Skill.ID.make(id),
       name: Skill.Name.make(parsed.name),

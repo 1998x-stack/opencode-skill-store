@@ -75,6 +75,7 @@ const installation = object(
 const operation = object(
   {
     operationId: string,
+    idempotencyKey: nullableString,
     assetId: string,
     title: string,
     version: string,
@@ -89,6 +90,7 @@ const operation = object(
   },
   [
     "operationId",
+    "idempotencyKey",
     "assetId",
     "title",
     "version",
@@ -225,6 +227,7 @@ export type Installation = {
 
 export type Operation = {
   operationId: string
+  idempotencyKey: string | null
   assetId: string
   title: string
   version: string
