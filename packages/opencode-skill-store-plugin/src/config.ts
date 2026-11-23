@@ -24,7 +24,25 @@ function text(value: unknown): string | undefined {
 
 function positive(value: unknown, fallback: number): number {
   const parsed = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+  const integer = Math.floor(parsed)
+  return Number.isSafeInteger(integer) && integer > 0 ? integer : fallback
+}
+
+function expandHome(value: string): string {
+  if (value === "~") return homedir()
+  if (value.startsWith("~/")) return path.join(homedir(), value.slice(2))
+  return value
+}
+
+function parseBaseUrl(value: string): URL {
+  const url = new URL(value)
+  const host = url.hostname.replace(/^\\[|\\]$/g, "").toLowerCase()
+  const loopback = host === "localhost" || host === "127.0.0.1" || host === "::1"
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))
+    throw new Error("SKILL_STORE_BASE_URL must use HTTPS (HTTP is allowed only for localhost)")
+  if (url.username || url.password || url.search || url.hash)
+    throw new Error("SKILL_STORE_BASE_URL must not contain credentials, query parameters or a fragment")
+  return url
 }
 
 export function loadConfig(options: PluginOptions, location: Plugin.Context["location"]): StoreConfig {
@@ -37,7 +55,7 @@ export function loadConfig(options: PluginOptions, location: Plugin.Context["loc
     .slice(0, 16)
 
   return {
-    baseUrl: baseUrl ? new URL(baseUrl) : undefined,
+    baseUrl: baseUrl ? parseBaseUrl(baseUrl) : undefined,
     apiKey,
     apiKeyHeader: text(options.apiKeyHeader) ?? process.env.SKILL_STORE_API_KEY_HEADER ?? "Authorization",
     apiKeyPrefix: text(options.apiKeyPrefix) ?? process.env.SKILL_STORE_API_KEY_PREFIX ?? "Bearer ",
@@ -48,7 +66,7 @@ export function loadConfig(options: PluginOptions, location: Plugin.Context["loc
       text(options.packageContentPath) ??
       process.env.SKILL_STORE_PACKAGE_CONTENT_PATH ??
       "/v1/asset-store/packages/{id}/content",
-    installRoot: path.resolve(root, locationKey),
+    installRoot: path.resolve(expandHome(root), locationKey),
     maxPackageBytes: positive(options.maxPackageBytes ?? process.env.SKILL_STORE_MAX_PACKAGE_BYTES, 100 * 1024 * 1024),
     maxUnpackedBytes: positive(
       options.maxUnpackedBytes ?? process.env.SKILL_STORE_MAX_UNPACKED_BYTES,
