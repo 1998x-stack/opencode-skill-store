@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { createHash, randomUUID } from "node:crypto"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { extractSkillArchive, safeArchivePath } from "./archive.js"
@@ -145,6 +145,14 @@ describe("extractSkillArchive", () => {
     })
   })
 
+  test("rejects a symlink extraction destination", async () => {
+    await fixture([skill], async (archive, dest) => {
+      const outside = dest + "-outside"
+      await mkdir(outside)
+      await symlink(outside, dest)
+      await expect(extractSkillArchive(archive, dest, limits)).rejects.toThrow("destination")
+    })
+  })
   test("rejects an oversized root SKILL.md before parsing it", async () => {
     await fixture([{ name: "SKILL.md", content: "x".repeat(40 * 1024) }], async (archive, dest) => {
       await expect(extractSkillArchive(archive, dest, { ...limits, maxSkillFileBytes: 32 * 1024 })).rejects.toThrow("SKILL.md exceeds")
