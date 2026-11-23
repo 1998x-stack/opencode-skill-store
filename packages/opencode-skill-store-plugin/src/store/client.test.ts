@@ -11,6 +11,7 @@ const config: StoreConfig = {
   assetDetailPath: "/v1/assets/{id}",
   packageContentPath: "/v1/packages/{id}/content",
   installRoot: "/tmp/skill-store-test",
+  storagePrefix: "location:v1:test:",
   maxPackageBytes: 1024,
   maxUnpackedBytes: 2048,
   maxSkillFileBytes: 1024,
