@@ -35,6 +35,10 @@ function now() {
   return new Date().toISOString()
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : []
 }
@@ -414,30 +418,59 @@ export class InstallManager {
       await this.progress(operation, "installed", 100, "Skill installed and verified in Runtime", "installed")
       await this.publishInstallation(item, "installed")
     } catch (error) {
+      const rollbackErrors: string[] = []
       if (activeChanged) {
         const activeFile = path.join(this.config.installRoot, "skills", runtimeID(operation.assetId), "active.json")
-        if (previousActive === undefined) await rm(activeFile, { force: true })
-        else await this.atomicJson(activeFile, previousActive)
+        try {
+          if (previousActive === undefined) await rm(activeFile, { force: true })
+          else await this.atomicJson(activeFile, previousActive)
+        } catch (rollbackError) {
+          rollbackErrors.push("active pointer restore failed: " + errorMessage(rollbackError))
+        }
         this.installations = previous
           ? [...this.installations.filter((item) => item.assetId !== previous!.assetId), previous]
           : this.installations.filter((item) => item.assetId !== operation.assetId)
-        await this.persistInstallations()
-        await this.refreshRuntime().catch(() => undefined)
-        // A failed activation must not leave an unreachable version directory behind.
-        if (createdVersion && committedVersionRoot)
-          await rm(committedVersionRoot, { recursive: true, force: true }).catch(() => undefined)
+        try {
+          await this.persistInstallations()
+        } catch (rollbackError) {
+          rollbackErrors.push("installation state restore failed: " + errorMessage(rollbackError))
+        }
+        try {
+          await this.refreshRuntime()
+        } catch (rollbackError) {
+          rollbackErrors.push("Runtime restore failed: " + errorMessage(rollbackError))
+          if (previous) {
+            previous.status = "broken"
+            try { await this.persistInstallations() } catch (persistError) {
+              rollbackErrors.push("broken status persistence failed: " + errorMessage(persistError))
+            }
+          }
+        }
+        if (createdVersion && committedVersionRoot) {
+          try { await rm(committedVersionRoot, { recursive: true, force: true }) }
+          catch (rollbackError) { rollbackErrors.push("new version cleanup failed: " + errorMessage(rollbackError)) }
+        }
       } else if (createdVersion && committedVersionRoot) {
-        await rm(committedVersionRoot, { recursive: true, force: true }).catch(() => undefined)
+        try { await rm(committedVersionRoot, { recursive: true, force: true }) }
+        catch (rollbackError) { rollbackErrors.push("new version cleanup failed: " + errorMessage(rollbackError)) }
       }
+
       const cancelled = signal.aborted
-      await this.progress(
-        operation,
-        cancelled ? "cancelled" : "failed",
-        operation.progress,
-        cancelled ? "Operation cancelled" : "Installation failed",
-        cancelled ? "cancelled" : "failed",
-        error instanceof Error ? error.message : String(error),
-      )
+      const originalError = errorMessage(error)
+      const terminalState = cancelled ? "cancelled" : "failed"
+      const terminalMessage = cancelled ? "Operation cancelled" : "Installation failed"
+      const terminalError = [originalError, ...rollbackErrors].filter(Boolean).join(" | ")
+      try {
+        await this.progress(operation, "terminal", operation.progress, terminalMessage, terminalState, terminalError)
+      } catch (persistError) {
+        // Keep the in-memory state terminal even if durable storage is temporarily unavailable.
+        operation.stage = "terminal"
+        operation.state = terminalState
+        operation.message = terminalMessage
+        operation.error = [terminalError, "operation state persistence failed: " + errorMessage(persistError)].filter(Boolean).join(" | ")
+        operation.updatedAt = now()
+        await this.emit?.("operationProgress", operation as unknown as Record<string, unknown>).catch(() => undefined)
+      }
     } finally {
       await rm(stageRoot, { recursive: true, force: true }).catch(() => undefined)
     }
