@@ -350,6 +350,7 @@ export class InstallManager {
       const extracted = await extractSkillArchive(zipFile, contentDir, {
         maxEntries: this.config.maxEntries,
         maxUnpackedBytes: this.config.maxUnpackedBytes,
+        maxSkillFileBytes: this.config.maxSkillFileBytes,
         maxCompressionRatio: this.config.maxCompressionRatio,
       })
       signal.throwIfAborted()
