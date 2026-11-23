@@ -256,11 +256,15 @@ export class InstallManager {
       await this.progress(operation, "resolving", 5, "Resolving asset and package metadata")
       const detail = await this.store.detail(operation.assetId)
       signal.throwIfAborted()
+      if (detail.asset.assetId !== operation.assetId) throw new Error("Skill Store detail returned a different asset ID")
+      if (detail.asset.kind.toLowerCase() !== "skill") throw new Error("Only Skill assets can be installed in the OpenCode Skill Runtime")
+      if (!detail.asset.title.trim()) throw new Error("Skill Store asset title is empty")
       operation.title = detail.asset.title
       const selected = this.selectVersion(detail, requestedVersion)
       operation.version = selected.version
-      const pkg = this.selectPackage(selected.packages)
+      const pkg = this.selectPackage(selected.packages, selected.version)
       if (!pkg.sha256 || !/^[a-f0-9]{64}$/i.test(pkg.sha256)) throw new Error("Store package is missing a valid SHA-256 digest")
+      if (pkg.sizeBytes <= 0) throw new Error("Store package is missing a valid byte size")
       if (pkg.sizeBytes > this.config.maxPackageBytes) throw new Error("Package exceeds the configured download size limit")
 
       const id = runtimeID(operation.assetId)
@@ -384,10 +388,12 @@ export class InstallManager {
     return selected
   }
 
-  private selectPackage(packages: PackageInfo[]) {
-    const exact = packages.find((item) => (item.platform === process.platform || item.platform === "any") &&
+  private selectPackage(packages: PackageInfo[], version: string) {
+    const exact = packages.find((item) => item.version === version &&
+      (item.platform === process.platform || item.platform === "any") &&
       (item.arch === process.arch || item.arch === "any"))
-    if (!exact) throw new Error("No Skill Store package matches this OpenCode Server platform")
+    if (!exact) throw new Error("No Skill Store package for this version matches the OpenCode Server platform")
+    if (!exact.packageId.trim()) throw new Error("Skill Store package ID is empty")
     return exact
   }
 
