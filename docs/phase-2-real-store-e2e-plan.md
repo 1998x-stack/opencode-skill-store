@@ -27,6 +27,16 @@ Do not expand the marketplace feature set before this slice is proven.
 
 These checks do not prove live Go Store compatibility, browser behavior, process restart recovery or LLM invocation.
 
+## 2.1 Compatibility research and version baseline
+
+- Current OpenCode Fork `dev` is at `26f4041911bbfbb101fbb5ae64409ca59e61020a`; upstream `anomalyco/opencode` `dev` is 26 commits ahead at the latest checked snapshot.
+- Fork App / Plugin version is `2.3.2`; the integration package pins `@opencode/plugin@2.3.2`. Upstream Plugin has moved to `2.4.0`.
+- Keep the current 2.3.2 pair matched for the first live vertical-slice test. Do not mix an upstream sync with the Go Store contract and E2E work.
+- If the target deployment already uses 2.4.0, stop and perform a separate upstream-sync PR first: sync fork `dev`, update the integration dependency, audit Plugin/RPC/Skill API changes, then rerun both CI suites.
+- OpenCode already supports HTTP Skill catalogs through `skills: ["https://.../"]` and an `index.json` file. That is useful for read-only catalog distribution, but it does not replace this integration's richer Store search, version metadata, install transactions, per-Location installed state, rollback and management UI.
+- The official GUI Plugin Web-loading work remains experimental: issue [#60976](https://github.com/anomalyco/opencode/issues/60976) is open and PR [#62608](https://github.com/anomalyco/opencode/pull/62608) remains Draft at the checked snapshot. Reusing the existing native Settings → Extensions → Skills view remains the lower-risk P0 path.
+- Official Skills frontmatter supports both `metadata.opencode/autoinvoke` and `disable-model-invocation`; the integration now handles both with explicit metadata precedence.
+
 ## 3. Phase 2 workstreams
 
 ### P2-0 — Freeze the real Go Store contract (P0)
