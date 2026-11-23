@@ -1,4 +1,4 @@
-import { Rpc } from "@opencode/plugin/rpc"
+import { Rpc } from "@opencode/plugin"
 
 const string = { type: "string" } as const
 const boolean = { type: "boolean" } as const
@@ -75,7 +75,6 @@ const installation = object(
 const operation = object(
   {
     operationId: string,
-    idempotencyKey: nullableString,
     assetId: string,
     title: string,
     version: string,
@@ -90,7 +89,6 @@ const operation = object(
   },
   [
     "operationId",
-    "idempotencyKey",
     "assetId",
     "title",
     "version",
@@ -227,7 +225,6 @@ export type Installation = {
 
 export type Operation = {
   operationId: string
-  idempotencyKey: string | null
   assetId: string
   title: string
   version: string

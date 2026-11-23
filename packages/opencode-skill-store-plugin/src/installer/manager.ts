@@ -124,9 +124,17 @@ export class InstallManager {
       installationSetEnabled: async (input: unknown) => {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
+        const previous = item.enabled
         item.enabled = request.enabled === true
-        await this.persistInstallations()
-        await this.refreshRuntime()
+        try {
+          await this.persistInstallations()
+          await this.refreshRuntime()
+        } catch (error) {
+          item.enabled = previous
+          await this.persistInstallations()
+          await this.refreshRuntime().catch(() => undefined)
+          throw error
+        }
         await this.publishInstallation(item, item.enabled ? "enabled" : "disabled")
         return { item }
       },
@@ -140,10 +148,18 @@ export class InstallManager {
       installationUninstall: async (input: unknown) => {
         const id = String(asRecord(input).installationId ?? "")
         const item = this.requireInstallation(id)
-        this.installations = this.installations.filter((entry) => entry.installationId !== id)
-        await this.persistInstallations()
-        await this.refreshRuntime()
-        await this.removeManagedDirectory(item.runtimeSkillId)
+        const previous = this.installations
+        this.installations = previous.filter((entry) => entry.installationId !== id)
+        try {
+          await this.persistInstallations()
+          await this.refreshRuntime()
+          await this.removeManagedDirectory(item.runtimeSkillId)
+        } catch (error) {
+          this.installations = previous
+          await this.persistInstallations()
+          await this.refreshRuntime().catch(() => undefined)
+          throw error
+        }
         await this.publishInstallation(item, "uninstalled")
         return { removed: true }
       },
