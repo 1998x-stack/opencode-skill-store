@@ -217,8 +217,15 @@ export class InstallManager {
         const version = typeof request.version === "string" ? request.version.trim() : null
         if (version && !/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(version))
           throw new Error("Pinned version has an unsafe identifier")
+        const previous = item.pinnedVersion
         item.pinnedVersion = version
-        await this.persistInstallations()
+        try {
+          await this.persistInstallations()
+        } catch (error) {
+          item.pinnedVersion = previous
+          await this.persistInstallations().catch(() => undefined)
+          throw error
+        }
         return { item }
       }),
       installationUninstall: async (input: unknown) => this.withMutation(async () => {
@@ -242,8 +249,8 @@ export class InstallManager {
       }),
       updateCheck: async () => {
         const updates: Array<{ installationId: string; assetId: string; currentVersion: string; latestVersion: string }> = []
-        for (const item of this.installations) {
-          if (item.pinnedVersion) continue
+        for (const item of [...this.installations]) {
+          if (item.status !== "installed" || item.pinnedVersion) continue
           const detail = await this.store.detail(item.assetId)
           const latest = detail.asset.latestVersion
           if (latest && latest !== item.version) {
