@@ -113,13 +113,14 @@ describe("StoreClient", () => {
     expect(response.ok).toBe(true)
     expect(authorization).toBe("Bearer test-secret")
     expect(redirect).toBe("error")
-    expect(accept).toBe("application/json")
+    expect(accept).toBe("application/zip, application/octet-stream")
   })
 
   test("reports HTTP errors without leaking credential values", async () => {
     globalThis.fetch = (async () => new Response("unauthorized", { status: 401 })) as typeof fetch
-    await expect(new StoreClient(config).detail("private")).rejects.toThrow("HTTP 401")
-    expect("test-secret").not.toContain("HTTP 401")
+    const error = await new StoreClient(config).detail("private").catch((value) => value)
+    expect(String(error)).toContain("HTTP 401")
+    expect(String(error)).not.toContain("test-secret")
   })
 
   test("rejects empty asset IDs before making a request", async () => {
