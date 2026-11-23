@@ -29,7 +29,7 @@ function normalizeAsset(input: unknown): AssetSummary {
     assetId: valueString(first(row, "asset_id", "assetId", "id")),
     title: valueString(first(row, "title", "name", "display_name")),
     description: valueString(first(row, "description", "summary")),
-    kind: valueString(first(row, "kind", "type"), "skill").toLowerCase(),
+    kind: valueString(first(row, "kind", "type")).trim().toLowerCase(),
     tags: Array.isArray(tags) ? tags.filter((item): item is string => typeof item === "string") : [],
     latestVersion: typeof version === "string" ? version : null,
   }
@@ -40,8 +40,8 @@ function normalizePackage(input: unknown): PackageInfo {
   return {
     packageId: valueString(first(row, "package_id", "packageId", "id")),
     version: valueString(first(row, "version")),
-    platform: valueString(first(row, "platform", "os"), "any"),
-    arch: valueString(first(row, "arch", "architecture"), "any"),
+    platform: valueString(first(row, "platform", "os")).trim().toLowerCase(),
+    arch: valueString(first(row, "arch", "architecture")).trim().toLowerCase(),
     sizeBytes: valueNumber(first(row, "size_bytes", "sizeBytes", "size")),
     sha256: valueString(first(row, "sha256", "checksum")).toLowerCase(),
   }
