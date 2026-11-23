@@ -98,6 +98,7 @@ async function environment() {
         return { dispose: async () => { runtime.length = 0 } }
       },
       reload: async () => {
+        if (current.failReload) throw new Error("simulated Runtime reload failure")
         runtime.length = 0
         transform(editor)
       },
@@ -111,6 +112,7 @@ async function environment() {
     description: "Proof of real Skill Runtime registration",
     version: "1.0.0",
     invalidDigest: false,
+    failReload: false,
   }
 
   const bytes = (version: string) => zip([
@@ -221,6 +223,27 @@ describe("InstallManager end-to-end without live Store", () => {
       await expect(s.api.installStart({ assetId: "different-skill", idempotencyKey: "same-key" })).rejects.toThrow("Idempotency")
       expect((await s.settle(a.operationId)).state).toBe("installed")
       expect((await s.api.operationList()).items.filter((x) => x.assetId === "proof-skill")).toHaveLength(1)
+    } finally { await s.close() }
+  })
+
+
+  test("Runtime reload failure restores the previous active version and removes the failed version", async () => {
+    const s = await environment()
+    try {
+      const first = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "before-reload-failure" })
+      expect((await s.settle(first.operationId)).state).toBe("installed")
+      const item = (await s.api.installationList()).items[0]
+      const skillRoot = path.join(s.config.installRoot, "skills", item.runtimeSkillId)
+      s.current.version = "1.1.0"
+      s.current.failReload = true
+      const next = await s.api.installStart({ assetId: s.current.assetId, version: "1.1.0", idempotencyKey: "reload-failure" })
+      const failed = await s.settle(next.operationId)
+      expect(failed.state).toBe("failed")
+      expect(failed.error).toContain("simulated Runtime reload failure")
+      expect((await s.api.installationList())[0]?.version ?? (await s.api.installationList()).items[0].version).toBe("1.0.0")
+      expect(JSON.parse(await readFile(path.join(skillRoot, "active.json"), "utf8")).version).toBe("1.0.0")
+      expect(s.runtime[0].content).toContain("# Proof 1.0.0")
+      await expect(stat(path.join(skillRoot, "versions", "1.1.0"))).rejects.toThrow()
     } finally { await s.close() }
   })
 
