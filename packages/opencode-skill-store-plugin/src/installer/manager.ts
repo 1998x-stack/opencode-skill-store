@@ -82,6 +82,11 @@ export class InstallManager {
   private emit?: Emit
   private skillRegistration?: { dispose: () => Promise<void> }
 
+  /** Return a durable key isolated to this plugin instance's OpenCode Location. */
+  private storageKey(key: string) {
+    return this.config.storagePrefix + key
+  }
+
   constructor(
     private readonly ctx: Plugin.Context,
     private readonly store: StoreClient,
@@ -108,7 +113,7 @@ export class InstallManager {
     await ensurePrivateDirectory(this.config.installRoot)
     await ensurePrivateDirectory(path.join(this.config.installRoot, "skills"))
     await ensurePrivateDirectory(path.join(this.config.installRoot, "staging"))
-    this.installations = asArray<unknown>(await this.ctx.storage.get("installations"))
+    this.installations = asArray<unknown>(await this.ctx.storage.get(this.storageKey("installations")))
       .map(asRecord)
       .filter((item) =>
         typeof item.installationId === "string" &&
@@ -126,7 +131,7 @@ export class InstallManager {
         pinnedVersion: typeof item.pinnedVersion === "string" ? item.pinnedVersion : null,
         status: item.status === "broken" || item.status === "cleanup_pending" ? item.status : "installed",
       })) as Installation[]
-    this.operations = asArray<unknown>(await this.ctx.storage.get("operations"))
+    this.operations = asArray<unknown>(await this.ctx.storage.get(this.storageKey("operations")))
       .map(asRecord)
       .filter((item) =>
         typeof item.operationId === "string" &&
@@ -681,7 +686,7 @@ export class InstallManager {
 
   private async persistInstallations() {
     const snapshot = structuredClone(this.installations)
-    const write = this.installationWrite.then(() => this.ctx.storage.set("installations", snapshot))
+    const write = this.installationWrite.then(() => this.ctx.storage.set(this.storageKey("installations"), snapshot))
     this.installationWrite = write.catch(() => undefined)
     await write
   }
@@ -689,7 +694,7 @@ export class InstallManager {
   private async persistOperations() {
     this.operations = this.operations.slice(-100)
     const snapshot = structuredClone(this.operations)
-    const write = this.operationWrite.then(() => this.ctx.storage.set("operations", snapshot))
+    const write = this.operationWrite.then(() => this.ctx.storage.set(this.storageKey("operations"), snapshot))
     this.operationWrite = write.catch(() => undefined)
     await write
   }
