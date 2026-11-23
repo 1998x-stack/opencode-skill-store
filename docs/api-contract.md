@@ -89,6 +89,7 @@ Required metadata:
 - version
 - size_bytes
 - sha256
+- package platform/arch must be explicit (`any` is not inferred when omitted)
 - platform / arch (or any)
 
 Do not return a browser-facing signed URL. If the actual Store uses signed URLs internally, the server adapter must validate the allowed origin and keep the URL server-side.
