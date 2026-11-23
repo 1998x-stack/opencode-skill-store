@@ -233,27 +233,43 @@ export class InstallManager {
   }
 
   private async start(input: InstallRequest) {
-    if (!input.assetId) throw new Error("assetId is required")
-    const idempotencyKey = input.idempotencyKey
+    const assetId = typeof input.assetId === "string" ? input.assetId.trim() : ""
+    const requestedVersion = typeof input.version === "string" ? input.version.trim() : undefined
+    const idempotencyKey = typeof input.idempotencyKey === "string" ? input.idempotencyKey.trim() : undefined
+    if (!assetId) throw new Error("assetId is required")
+    if (assetId.length > 512) throw new Error("assetId is too long")
+    if (requestedVersion && !/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(requestedVersion))
+      throw new Error("Requested version has an unsafe identifier")
+    if (idempotencyKey && (!idempotencyKey.length || idempotencyKey.length > 256))
+      throw new Error("Idempotency key must contain 1 to 256 characters")
+
     if (idempotencyKey) {
       const previous = this.operations.find((item) => item.idempotencyKey === idempotencyKey)
       if (previous) {
-        if (previous.assetId !== input.assetId || (input.version && previous.version !== input.version))
+        if (previous.assetId !== assetId || (requestedVersion && previous.version !== requestedVersion && previous.version !== "latest"))
           throw new Error("Idempotency key was already used for a different request")
         return { operationId: previous.operationId, state: previous.state }
       }
     }
-    const active = this.activeByAsset.get(input.assetId)
-    if (active) return { operationId: active, state: "running" }
+    const active = this.activeByAsset.get(assetId)
+    if (active) {
+      const current = this.operations.find((item) => item.operationId === active)
+      if (!current) this.activeByAsset.delete(assetId)
+      else {
+        if (requestedVersion && current.version !== requestedVersion)
+          throw new Error("A different version of this Skill is already being installed")
+        return { operationId: active, state: current.state }
+      }
+    }
 
     const operationId = "op_" + randomUUID()
     const operation: Operation = {
       operationId,
       idempotencyKey: idempotencyKey ?? null,
-      assetId: input.assetId,
-      title: input.assetId,
-      version: input.version ?? "latest",
-      kind: this.installations.some((item) => item.assetId === input.assetId) ? "update" : "install",
+      assetId,
+      title: assetId,
+      version: requestedVersion ?? "latest",
+      kind: this.installations.some((item) => item.assetId === assetId) ? "update" : "install",
       state: "queued",
       stage: "queued",
       progress: 0,
@@ -263,19 +279,19 @@ export class InstallManager {
       updatedAt: now(),
     }
     this.operations.push(operation)
-    this.activeByAsset.set(input.assetId, operationId)
+    this.activeByAsset.set(assetId, operationId)
     try {
       await this.persistOperations()
     } catch (error) {
       this.operations = this.operations.filter((item) => item.operationId !== operationId)
-      this.activeByAsset.delete(input.assetId)
+      this.activeByAsset.delete(assetId)
       throw error
     }
     const controller = new AbortController()
     this.controllers.set(operationId, controller)
-    const job = this.runInstall(operation, input.version, controller.signal).finally(() => {
+    const job = this.runInstall(operation, requestedVersion, controller.signal).finally(() => {
       this.controllers.delete(operationId)
-      this.activeByAsset.delete(input.assetId)
+      this.activeByAsset.delete(assetId)
       this.jobs.delete(operationId)
     })
     this.jobs.set(operationId, job)
