@@ -77,6 +77,7 @@ Copy examples/opencode.jsonc into the applicable OpenCode config, then replace t
         "installRoot": "/absolute/path/to/persistent/opencode-skill-store",
         "maxPackageBytes": 104857600,
         "maxUnpackedBytes": 314572800,
+        "maxSkillFileBytes": 2097152,
         "maxEntries": 2000,
         "maxCompressionRatio": 100
       }
