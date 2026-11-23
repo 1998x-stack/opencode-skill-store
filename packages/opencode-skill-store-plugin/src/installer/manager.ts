@@ -558,6 +558,22 @@ export class InstallManager {
       const versionRoot = path.join(installRoot, "skills", item.runtimeSkillId, "versions", item.version)
       const skillFile = path.join(versionRoot, "SKILL.md")
       try {
+        if (!/^[a-f0-9]{64}$/i.test(item.sha256)) throw new Error("Persisted installation digest is invalid")
+        const manifest = JSON.parse(await readFile(path.join(versionRoot, ".store-manifest.json"), "utf8")) as {
+          assetId?: string
+          version?: string
+          sha256?: string
+        }
+        if (manifest.assetId !== item.assetId || manifest.version !== item.version ||
+          manifest.sha256?.toLowerCase() !== item.sha256.toLowerCase())
+          throw new Error("Installed package manifest does not match the durable installation record")
+        const activeFile = path.join(installRoot, "skills", item.runtimeSkillId, "active.json")
+        let active: { version?: string; sha256?: string } | undefined
+        try { active = JSON.parse(await readFile(activeFile, "utf8")) as { version?: string; sha256?: string } }
+        catch { active = undefined }
+        if (active?.version !== item.version || active.sha256?.toLowerCase() !== item.sha256.toLowerCase())
+          await this.atomicJson(activeFile, { version: item.version, sha256: item.sha256, updatedAt: now() })
+
         const resolvedSkillFile = await realpath(skillFile)
         const relative = path.relative(installRoot, resolvedSkillFile)
         if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
