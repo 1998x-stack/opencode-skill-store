@@ -48,9 +48,9 @@ Do not infer actual API behavior from candidate paths in docs/api-contract.md. U
 
 ## Step 2 — Verify OpenCode API compatibility
 
-Inspect actual Fork commit, Bun version, @opencode/plugin, @opencode/schema and @opencode/client versions.
+Inspect actual Fork commit, Bun version, @opencode/plugin, @opencode/schema and @opencode/client versions. Compare the Fork's dev commit and package versions with upstream anomalyco/opencode/dev. Current integration baseline is Fork 2.3.2 + @opencode/plugin 2.3.2; upstream has advanced to 2.4.0. Keep this pair matched for the first live E2E unless the target Server already runs 2.4.0; if it does, sync upstream in a separate branch/PR and rerun all checks before proceeding.
 
-Verify current Settings → Extensions → Skills UI, Server SDK reconnection behavior, ctx.location semantics, Skill.Info schema, ctx.skill.transform/reload/list, RPC registration and event payloads. Inspect `packages/core/src/plugin/host.ts`: `ctx.storage` is namespaced by plugin ID only, not by Location. Confirm the plugin prefixes every durable key with `location:v1:<hash>:` where the hash covers directory and optional workspaceID.
+Verify current Settings → Extensions → Skills UI, Server SDK reconnection behavior, ctx.location semantics, Skill.Info schema, ctx.skill.transform/reload/list, RPC registration and event payloads. OpenCode already supports HTTP Skills catalogs via `skills` config and `index.json`; do not create a second Skill loader. The custom integration owns Store search, install transactions, versions, rollback and management UI. Inspect `packages/core/src/plugin/host.ts`: `ctx.storage` is namespaced by plugin ID only, not by Location. Confirm the plugin prefixes every durable key with `location:v1:<hash>:` where the hash covers directory and optional workspaceID.
 
 The Web contract at packages/app/src/settings/providers/skill-store-rpc.ts must exactly match the plugin contract at packages/opencode-skill-store-plugin/src/contracts.ts.
 
