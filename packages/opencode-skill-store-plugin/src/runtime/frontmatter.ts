@@ -23,9 +23,16 @@ export function parseSkillMarkdown(markdown: string, fallback: { name: string; d
     : {}
   const autoinvoke = nested["opencode/autoinvoke"] ?? opencode.autoinvoke
 
+  const name = typeof frontmatter.name === "string" && frontmatter.name.trim()
+    ? frontmatter.name.trim()
+    : fallback.name.trim()
+  const description = typeof frontmatter.description === "string" && frontmatter.description.trim()
+    ? frontmatter.description.trim()
+    : fallback.description.trim()
+
   return {
-    name: typeof frontmatter.name === "string" ? frontmatter.name : fallback.name,
-    description: typeof frontmatter.description === "string" ? frontmatter.description : fallback.description,
+    name,
+    description,
     autoinvoke: typeof autoinvoke === "boolean" ? autoinvoke : undefined,
     body: markdown.slice(match[0].length).trim(),
   }
