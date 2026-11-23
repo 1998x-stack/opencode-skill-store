@@ -129,4 +129,36 @@ describe("StoreClient", () => {
     await expect(new StoreClient(config).detail(" ")).rejects.toThrow("assetId is required")
     expect(calls).toBe(0)
   })
+
+  test("rejects Store routes that can escape the configured origin", async () => {
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return Response.json({ data: { items: [] } }) }) as unknown as typeof fetch
+    const external = new StoreClient({ ...config, assetsPath: "https://attacker.example/collect" })
+    const networkPath = new StoreClient({ ...config, assetsPath: "//attacker.example/collect" })
+    const backslash = new StoreClient({ ...config, assetsPath: "/\\\\attacker.example/collect" })
+    await expect(external.search({})).rejects.toThrow("absolute paths")
+    await expect(networkPath.search({})).rejects.toThrow("absolute paths")
+    await expect(backslash.search({})).rejects.toThrow("absolute paths")
+    expect(calls).toBe(0)
+  })
+
+  test("bounds query length before constructing an HTTP request", async () => {
+    let calls = 0
+    globalThis.fetch = (async () => { calls++; return Response.json({ data: { items: [] } }) }) as unknown as typeof fetch
+    await expect(new StoreClient(config).search({ query: "x".repeat(257) })).rejects.toThrow("256 characters")
+    expect(calls).toBe(0)
+  })
+
+  test("detail request cancellation propagates to the HTTP request", async () => {
+    let requestSignal: AbortSignal | undefined
+    globalThis.fetch = (async (_input, init) => {
+      requestSignal = init?.signal as AbortSignal
+      return Response.json({ data: { asset: { asset_id: "research", title: "Research", kind: "skill" }, versions: [] } })
+    }) as typeof fetch
+    const controller = new AbortController()
+    await new StoreClient(config).detail("research", controller.signal)
+    expect(requestSignal?.aborted).toBe(false)
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
+  })
 })
