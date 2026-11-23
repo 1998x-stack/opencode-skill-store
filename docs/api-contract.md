@@ -115,7 +115,7 @@ Override:
 
 If the real Go Store expects X-Service-Key or another header, configure it rather than hardcoding a second credential path.
 
-## 4. Route overrides
+## 5. Route overrides
 
 - SKILL_STORE_ASSETS_PATH
 - SKILL_STORE_ASSET_DETAIL_PATH — use {id} placeholder.
