@@ -68,3 +68,14 @@ Do **not** declare production readiness or merge these draft PRs until the live 
 - Added a regression test that creates two plugin managers over one shared storage Map, using the same directory and different workspace IDs. It verifies separate installation/operation records and separate `location:v1:<hash>:` keys.
 - This closes the previously identified mismatch: OpenCode Host storage is plugin-ID namespaced, so Location isolation must be explicit in each key.
 - This is CI evidence only; no local server, real Go Store, browser E2E, or live Agent invocation is claimed.
+
+
+## Credential boundary and frontmatter compatibility follow-up — 2026-11-24
+
+- Fix commit: `f48220339fa54c524c64d9ed049da69a4594e309`.
+- GitHub Actions: [push run 45219784410](https://github.com/1998x-stack/opencode-skill-store/actions/runs/45219784410) — **success**.
+- TypeScript typecheck: success.
+- `bun test`: **59 tests passed, 0 failed** across 5 files.
+- Plugin Options containing `apiKey` are rejected; only `SKILL_STORE_API_KEY` from the OpenCode Server process environment is accepted.
+- `disable-model-invocation` now maps to the inverse Runtime `autoinvoke` flag, and explicit `metadata.opencode/autoinvoke` takes precedence as documented by OpenCode.
+- This remains CI evidence; live Go Store, browser E2E and model-backed Agent invocation are still not run.
