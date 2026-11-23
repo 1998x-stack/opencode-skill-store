@@ -38,6 +38,14 @@ describe("loadConfig", () => {
     expect(() => loadConfig(options({ storeBaseUrl: "https://skills.example.test?token=secret" }), location)).toThrow("must not contain credentials")
   })
 
+  test("preserves intentional trailing whitespace in the API key prefix", () => {
+    const config = loadConfig(options({
+      storeBaseUrl: "https://skills.example.test",
+      apiKeyPrefix: "Bearer ",
+    }), location)
+    expect(config.apiKeyPrefix).toBe("Bearer ")
+  })
+
   test("falls back when a positive integer limit would otherwise floor to zero", () => {
     const config = loadConfig(options({
       storeBaseUrl: "https://skills.example.test",
