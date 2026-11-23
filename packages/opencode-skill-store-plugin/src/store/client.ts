@@ -114,7 +114,7 @@ export class StoreClient {
 
   private url(route: string) {
     if (!this.config.baseUrl) throw new Error("SKILL_STORE_BASE_URL is not configured on the OpenCode Server")
-    if (!route.startsWith("/") || route.startsWith("//") || route.includes("\\\\") || /[\\u0000-\\u001f]/.test(route))
+    if (!route.startsWith("/") || route.startsWith("//") || route.includes("\\") || /[\u0000-\u001f]/.test(route))
       throw new Error("Skill Store routes must be absolute paths on the configured origin")
     const url = new URL(route, this.config.baseUrl)
     if (url.origin !== this.config.baseUrl.origin) throw new Error("Skill Store route changed the configured origin")
