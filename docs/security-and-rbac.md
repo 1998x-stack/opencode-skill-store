@@ -5,7 +5,7 @@
 - Browser -> OpenCode Server Typed RPC, never direct browser -> Go Store.
 - Server-only API Key and ZIP download.
 - SHA-256 package integrity verification and archive-entry filtering.
-- Install state isolated by OpenCode Location directory hash.
+- Install files and durable `ctx.storage` records isolated by a versioned OpenCode Location hash (`directory` + optional `workspaceID`). The host's storage namespace is plugin-ID-only, so this isolation is implemented explicitly in the key prefix.
 - Only plugin-created Runtime IDs, prefixed with `ss-`, are managed.
 - ZIP installation does not execute contained scripts.
 - `SKILL.md` is capped separately at 2 MiB before YAML parsing; the full archive remains subject to independent entry, byte and compression-ratio limits.
@@ -37,6 +37,7 @@ Until end-user identity and policy enforcement are implemented, deploy only on a
 ## Data isolation
 
 Runtime Location isolation, Store tenant authorization and filesystem process isolation are distinct controls:
+- `ctx.storage` is not automatically Location-scoped; the integration must prefix every durable key with the Location hash. The P0 regression test must instantiate two Locations over one shared plugin KV backend.
 - Location isolation avoids mixing installed records between project directories.
 - Store tenant authorization controls which assets may be discovered/downloaded.
 - OS/container isolation limits what an Agent can read or execute after installation.
