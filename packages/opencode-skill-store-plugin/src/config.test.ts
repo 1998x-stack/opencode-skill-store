@@ -38,6 +38,25 @@ describe("loadConfig", () => {
     expect(() => loadConfig(options({ storeBaseUrl: "https://skills.example.test?token=secret" }), location)).toThrow("must not contain credentials")
   })
 
+  test("rejects API keys supplied through plugin options", () => {
+    expect(() => loadConfig(options({
+      storeBaseUrl: "https://skills.example.test",
+      apiKey: "must-not-be-used",
+    }), location)).toThrow("must be provided through the OpenCode Server process environment")
+  })
+
+  test("reads the Store API key only from the Server process environment", () => {
+    const previous = process.env.SKILL_STORE_API_KEY
+    process.env.SKILL_STORE_API_KEY = "server-process-secret"
+    try {
+      const config = loadConfig(options({ storeBaseUrl: "https://skills.example.test" }), location)
+      expect(config.apiKey).toBe("server-process-secret")
+    } finally {
+      if (previous === undefined) delete process.env.SKILL_STORE_API_KEY
+      else process.env.SKILL_STORE_API_KEY = previous
+    }
+  })
+
   test("preserves intentional trailing whitespace in the API key prefix", () => {
     const config = loadConfig(options({
       storeBaseUrl: "https://skills.example.test",
