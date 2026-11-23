@@ -246,7 +246,8 @@ SHA-256 不等于发布者身份认证。P1 增加签名 manifest（如 Ed25519�
 ## 10. 权限与信任边界
 
 - 浏览器仅发送 asset_id、version、idempotency_key。
-- SKILL_STORE_API_KEY 只存在 OpenCode Server 进程环境。
+- `SKILL_STORE_API_KEY` 只从 OpenCode Server 进程环境读取；Plugin Options 中出现 `apiKey` 会拒绝启动，避免密钥落入项目配置文件。
+- SKILL_STORE_API_KEY 不进入 Web bundle、RPC 响应或日志。
 - Store Base URL 由服务端配置，不接受浏览器提交 URL，避免 SSRF。
 - 下载只访问配置好的 Store package route；默认禁止重定向。
 - Skill 内容属于不可信指令；安装不执行脚本，Agent 后续执行工具仍受 OpenCode permission rules 控制。
