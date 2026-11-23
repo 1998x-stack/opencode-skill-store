@@ -162,6 +162,7 @@ async function environment() {
     installRoot: path.join(root, "installed"),
     maxPackageBytes: 1024 * 1024,
     maxUnpackedBytes: 1024 * 1024,
+    maxSkillFileBytes: 1024 * 1024,
     maxEntries: 50,
     maxCompressionRatio: 100,
   }
