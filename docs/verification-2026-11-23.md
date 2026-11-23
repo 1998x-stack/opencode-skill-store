@@ -8,31 +8,32 @@ This record describes commands actually executed by GitHub Actions for the imple
 
 - Repository: https://github.com/1998x-stack/opencode-skill-store
 - Branch: `skill-store-mvp`
-- Commit tested: `48beb970f0c70946b86581f74f0342b7d09d7478`
-- Workflow: https://github.com/1998x-stack/opencode-skill-store/actions/runs/45175070587
+- Commit tested: `6720c6b755a76bcd927aae7728afb0c67bb81649`
+- Workflow: https://github.com/1998x-stack/opencode-skill-store/actions/runs/45183496306
 - Result: **success**
 - `bun install`: success
 - `bun run typecheck`: success
-- `bun test`: **28 passed, 0 failed** across 3 files
+- `bun test`: **34 passed, 0 failed** across 4 files
 
 Test categories:
 - 3 SKILL.md frontmatter tests
 - 13 ZIP path containment tests (including multiple traversal/Windows paths)
 - 8 ZIP extraction and security tests
-- 4 fake-Store installer integration tests, including complete staged install, SHA failure rollback, idempotency and enable/disable/uninstall.
+- 5 fake-Store installer integration tests, including complete staged install, SHA failure rollback, Runtime reload failure rollback/version cleanup, idempotency and enable/disable/uninstall.
+- 5 Store HTTP adapter tests, including catalog normalization, version/package metadata, auth headers, redirect policy and secret-safe HTTP errors.
 
 ## OpenCode Web Fork
 
 - Repository: https://github.com/1998x-stack/opencode
 - Branch: `skill-store-ui`
-- Commit tested: `142506f53c235245f843dcf9f30c4505a10f08ab`
-- Workflow: https://github.com/1998x-stack/opencode/actions/runs/45174660493
+- Commit tested: `242a2121af6a38cc1b31c821ed28526728ca1fd7`
+- Workflow: https://github.com/1998x-stack/opencode/actions/runs/45182650233
 - Result: **success**
 - `bun install --frozen-lockfile`: success
 - `bun run --cwd packages/app typecheck:tsc`: success
 - `bun run --cwd packages/app test:unit`: **2876 passed, 0 failed** across 290 files
 
-These are existing App unit tests plus new feature code compilation. They are **not** a substitute for a Skill Store-specific browser test.
+The existing App unit suite passed after the new UI changes, including explicit Location scoping, manual search submission (no per-keystroke network requests), and visible failed/interrupted operation states. These are **not** a substitute for a Skill Store-specific browser test.
 
 ## PDF
 
