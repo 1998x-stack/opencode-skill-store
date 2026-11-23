@@ -29,7 +29,7 @@ function normalizeAsset(input: unknown): AssetSummary {
     assetId: valueString(first(row, "asset_id", "assetId", "id")),
     title: valueString(first(row, "title", "name", "display_name")),
     description: valueString(first(row, "description", "summary")),
-    kind: valueString(first(row, "kind", "type"), "skill"),
+    kind: valueString(first(row, "kind", "type"), "skill").toLowerCase(),
     tags: Array.isArray(tags) ? tags.filter((item): item is string => typeof item === "string") : [],
     latestVersion: typeof version === "string" ? version : null,
   }
@@ -58,7 +58,8 @@ export class StoreClient {
     if (!this.config.baseUrl) return { configured: false, items: [], nextCursor: null }
     const url = this.url(this.config.assetsPath)
     url.searchParams.set("kind", "skill")
-    url.searchParams.set("limit", String(input.limit ?? 24))
+    const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(100, Math.floor(input.limit!))) : 24
+    url.searchParams.set("limit", String(limit))
     if (input.query) url.searchParams.set("q", input.query)
     if (input.cursor) url.searchParams.set("cursor", input.cursor)
 
@@ -74,6 +75,7 @@ export class StoreClient {
   }
 
   async detail(assetId: string): Promise<AssetDetail> {
+    if (!assetId.trim()) throw new Error("assetId is required")
     const url = this.url(this.config.assetDetailPath.replace("{id}", encodeURIComponent(assetId)))
     const body = record(await this.json(url))
     const data = record(body.data ?? body)
