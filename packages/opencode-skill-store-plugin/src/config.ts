@@ -14,6 +14,7 @@ export type StoreConfig = {
   installRoot: string
   maxPackageBytes: number
   maxUnpackedBytes: number
+  maxSkillFileBytes: number
   maxEntries: number
   maxCompressionRatio: number
 }
@@ -71,6 +72,10 @@ export function loadConfig(options: PluginOptions, location: Plugin.Context["loc
     maxUnpackedBytes: positive(
       options.maxUnpackedBytes ?? process.env.SKILL_STORE_MAX_UNPACKED_BYTES,
       300 * 1024 * 1024,
+    ),
+    maxSkillFileBytes: positive(
+      options.maxSkillFileBytes ?? process.env.SKILL_STORE_MAX_SKILL_FILE_BYTES,
+      2 * 1024 * 1024,
     ),
     maxEntries: positive(options.maxEntries ?? process.env.SKILL_STORE_MAX_ENTRIES, 2000),
     maxCompressionRatio: positive(
