@@ -153,7 +153,8 @@ Open the Web app, connect to the local Server at http://127.0.0.1:4096 if prompt
 Server-side disk checks:
 
 ~~~bash
-find "$OPENCODE_SKILL_STORE_DIR" -maxdepth 6 -type f | sort
+STORE_ROOT="${OPENCODE_SKILL_STORE_DIR:-$HOME/.opencode/skill-store}"
+find "$STORE_ROOT" -maxdepth 7 -type f | sort
 ~~~
 
 Expected:
