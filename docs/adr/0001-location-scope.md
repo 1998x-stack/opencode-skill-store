@@ -11,13 +11,16 @@ A Server-global installation manifest would create ambiguous behavior when the s
 
 ## Decision
 
-P0 stores installations under a stable hash of ctx.location.directory. Plugin durable state and Runtime registration are treated as belonging to that Location.
+P0 stores files under a stable hash of `ctx.location.directory` plus optional `workspaceID`.
+
+OpenCode's `ctx.storage` is namespaced by plugin ID only, not automatically by Location. Therefore every durable key must also use an explicit versioned Location prefix, `location:v1:<location-hash>:`. Runtime registration remains scoped to the plugin's active Location.
 
 ## Consequences
 
 - The same Store Skill may be installed independently into multiple Locations.
-- Web event listeners filter by event.location.directory.
-- A different Location does not inherit the current Location's installed list.
+- Filesystem paths and durable `ctx.storage` keys use the same Location hash.
+- The same plugin ID can serve multiple Locations without sharing installation or operation records.
+- Web event listeners filter by `event.location.directory`; workspace-aware event filtering is a follow-up for same-directory workspaces.
 - Disk usage may duplicate identical Skill versions across Locations.
 
 ## Future option
