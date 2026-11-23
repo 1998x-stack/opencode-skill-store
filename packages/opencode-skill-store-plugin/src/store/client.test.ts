@@ -38,6 +38,7 @@ describe("StoreClient", () => {
             { asset_id: "research", title: "Research", description: "Evidence workflow", kind: "SKILL", tags: ["research"], latest_version: "1.2.0" },
             { asset_id: "agent", title: "Agent", kind: "agent" },
             { asset_id: "", title: "Missing ID", kind: "skill" },
+            { asset_id: "missing-kind", title: "Missing kind" },
           ],
           cursor: { next: "cursor-next" },
         },
@@ -97,6 +98,22 @@ describe("StoreClient", () => {
       sizeBytes: 123,
       sha256: "a".repeat(64),
     })
+  })
+
+  test("does not invent a Skill type or universal package target when Store metadata is missing", async () => {
+    globalThis.fetch = (async () => Response.json({
+      data: {
+        asset: { asset_id: "research", title: "Research" },
+        versions: [{
+          version: "1.0.0",
+          packages: [{ package_id: "pkg", version: "1.0.0", size_bytes: 10, sha256: "a".repeat(64) }],
+        }],
+      },
+    })) as typeof fetch
+    const result = await new StoreClient(config).detail("research")
+    expect(result.asset.kind).toBe("")
+    expect(result.versions[0].packages[0].platform).toBe("")
+    expect(result.versions[0].packages[0].arch).toBe("")
   })
 
   test("sends Store credentials only on the server download request and forbids implicit redirects", async () => {
