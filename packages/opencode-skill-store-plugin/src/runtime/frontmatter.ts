@@ -21,7 +21,12 @@ export function parseSkillMarkdown(markdown: string, fallback: { name: string; d
   const opencode = nested.opencode !== null && typeof nested.opencode === "object"
     ? (nested.opencode as Record<string, unknown>)
     : {}
-  const autoinvoke = nested["opencode/autoinvoke"] ?? opencode.autoinvoke
+  const metadataAutoinvoke = [nested["opencode/autoinvoke"], opencode.autoinvoke]
+    .find((value): value is boolean => typeof value === "boolean")
+  const disableModelInvocation = frontmatter["disable-model-invocation"]
+  // Match OpenCode's frontmatter contract; the namespaced metadata flag takes precedence.
+  const autoinvoke = metadataAutoinvoke ??
+    (typeof disableModelInvocation === "boolean" ? !disableModelInvocation : undefined)
 
   const name = typeof frontmatter.name === "string" && frontmatter.name.trim()
     ? frontmatter.name.trim()
