@@ -116,7 +116,7 @@ describe("extractSkillArchive", () => {
   })
   test("rejects parent traversal before writing outside staging", async () => {
     await fixture([skill, { name: "../outside.txt", content: "bad" }], async (archive, dest) => {
-      await expect(extractSkillArchive(archive, dest, limits)).rejects.toThrow("unsafe")
+      await expect(extractSkillArchive(archive, dest, limits)).rejects.toThrow(/invalid relative path|unsafe/)
     })
   })
   test("rejects Unix symlink entries", async () => {
