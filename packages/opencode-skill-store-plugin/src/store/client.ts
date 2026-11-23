@@ -65,7 +65,7 @@ export class StoreClient {
     if (input.query?.trim()) url.searchParams.set("q", input.query.trim())
     if (input.cursor) url.searchParams.set("cursor", input.cursor)
 
-    const body = record(await this.json(url, signal))
+    const body = record(await this.json(url))
     const data = record(body.data ?? body)
     const rows = Array.isArray(data.items) ? data.items : Array.isArray(data.assets) ? data.assets : []
     const cursor = first(record(data.cursor), "next", "next_cursor") ?? first(data, "next_cursor", "nextCursor")
@@ -80,7 +80,7 @@ export class StoreClient {
     if (!assetId.trim()) throw new Error("assetId is required")
     if (assetId.length > 512) throw new Error("assetId is too long")
     const url = this.url(this.config.assetDetailPath.replace("{id}", encodeURIComponent(assetId)))
-    const body = record(await this.json(url))
+    const body = record(await this.json(url, signal))
     const data = record(body.data ?? body)
     const rawAsset = first(data, "asset", "item") ?? data
     const rawVersions = first(data, "versions", "releases")
