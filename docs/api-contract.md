@@ -123,7 +123,7 @@ If the real Go Store expects X-Service-Key or another header, configure it rathe
 
 Plugin options support corresponding camelCase fields: assetsPath, assetDetailPath, packageContentPath.
 
-## 5. OpenCode RPC Contract
+## 6. OpenCode RPC Contract
 
 RPC ID: skill-store
 
