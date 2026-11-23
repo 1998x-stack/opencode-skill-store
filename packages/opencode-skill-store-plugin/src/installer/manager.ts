@@ -53,6 +53,7 @@ export class InstallManager {
   private snapshot: RuntimeSkill[] = []
   private controllers = new Map<string, AbortController>()
   private activeByAsset = new Map<string, string>()
+  private jobs = new Map<string, Promise<void>>()
   private emit?: Emit
   private skillRegistration?: { dispose: () => Promise<void> }
 
@@ -81,6 +82,9 @@ export class InstallManager {
       }
     }
     await this.persistOperations()
+    // Abandoned work cannot resume safely after process restart. Remove only our own staging entries.
+    await rm(path.join(this.config.installRoot, "staging"), { recursive: true, force: true })
+    await mkdir(path.join(this.config.installRoot, "staging"), { recursive: true, mode: 0o700 })
     this.snapshot = await this.loadRuntimeSnapshot()
     this.skillRegistration = await this.ctx.skill.transform((editor) => {
       for (const item of this.snapshot) editor.add(item)
@@ -89,6 +93,7 @@ export class InstallManager {
 
   async close() {
     for (const controller of this.controllers.values()) controller.abort()
+    await Promise.allSettled([...this.jobs.values()])
     this.controllers.clear()
     await this.skillRegistration?.dispose()
   }
@@ -124,6 +129,7 @@ export class InstallManager {
       installationSetEnabled: async (input: unknown) => {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
+        this.requireIdle(item.assetId)
         const previous = item.enabled
         item.enabled = request.enabled === true
         try {
@@ -141,6 +147,7 @@ export class InstallManager {
       installationPin: async (input: unknown) => {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
+        this.requireIdle(item.assetId)
         item.pinnedVersion = typeof request.version === "string" ? request.version : null
         await this.persistInstallations()
         return { item }
@@ -148,6 +155,7 @@ export class InstallManager {
       installationUninstall: async (input: unknown) => {
         const id = String(asRecord(input).installationId ?? "")
         const item = this.requireInstallation(id)
+        this.requireIdle(item.assetId)
         const previous = this.installations
         this.installations = previous.filter((entry) => entry.installationId !== id)
         try {
@@ -188,7 +196,11 @@ export class InstallManager {
     const idempotencyKey = input.idempotencyKey
     if (idempotencyKey) {
       const previous = this.operations.find((item) => item.idempotencyKey === idempotencyKey)
-      if (previous) return { operationId: previous.operationId, state: previous.state }
+      if (previous) {
+        if (previous.assetId !== input.assetId || (input.version && previous.version !== input.version))
+          throw new Error("Idempotency key was already used for a different request")
+        return { operationId: previous.operationId, state: previous.state }
+      }
     }
     const active = this.activeByAsset.get(input.assetId)
     if (active) return { operationId: active, state: "running" }
@@ -211,13 +223,21 @@ export class InstallManager {
     }
     this.operations.push(operation)
     this.activeByAsset.set(input.assetId, operationId)
-    await this.persistOperations()
+    try {
+      await this.persistOperations()
+    } catch (error) {
+      this.operations = this.operations.filter((item) => item.operationId !== operationId)
+      this.activeByAsset.delete(input.assetId)
+      throw error
+    }
     const controller = new AbortController()
     this.controllers.set(operationId, controller)
-    void this.runInstall(operation, input.version, controller.signal).finally(() => {
+    const job = this.runInstall(operation, input.version, controller.signal).finally(() => {
       this.controllers.delete(operationId)
       this.activeByAsset.delete(input.assetId)
+      this.jobs.delete(operationId)
     })
+    this.jobs.set(operationId, job)
     return { operationId, state: operation.state }
   }
 
@@ -235,6 +255,7 @@ export class InstallManager {
       await mkdir(stageRoot, { recursive: true, mode: 0o700 })
       await this.progress(operation, "resolving", 5, "Resolving asset and package metadata")
       const detail = await this.store.detail(operation.assetId)
+      signal.throwIfAborted()
       operation.title = detail.asset.title
       const selected = this.selectVersion(detail, requestedVersion)
       operation.version = selected.version
@@ -261,6 +282,7 @@ export class InstallManager {
         maxUnpackedBytes: this.config.maxUnpackedBytes,
         maxCompressionRatio: this.config.maxCompressionRatio,
       })
+      signal.throwIfAborted()
       const markdown = await readFile(extracted.skillFile, "utf8")
       const parsed = parseSkillMarkdown(markdown, { name: detail.asset.title, description: detail.asset.description })
       if (!parsed.description.trim()) throw new Error("SKILL.md must provide a description or inherit one from Store metadata")
@@ -397,7 +419,8 @@ export class InstallManager {
     operation.error = error
     operation.updatedAt = now()
     await this.persistOperations()
-    await this.emit?.("operationProgress", operation as unknown as Record<string, unknown>)
+    // A disconnected UI must not turn a successful filesystem transaction into a failed install.
+    await this.emit?.("operationProgress", operation as unknown as Record<string, unknown>).catch(() => undefined)
   }
 
   private async refreshRuntime() {
@@ -435,7 +458,11 @@ export class InstallManager {
   }
 
   private async publishInstallation(item: Installation, action: string) {
-    await this.emit?.("installationChanged", { installationId: item.installationId, action })
+    await this.emit?.("installationChanged", { installationId: item.installationId, action }).catch(() => undefined)
+  }
+
+  private requireIdle(assetId: string) {
+    if (this.activeByAsset.has(assetId)) throw new Error("A Skill installation or update is already in progress")
   }
 
   private requireInstallation(id: string) {
