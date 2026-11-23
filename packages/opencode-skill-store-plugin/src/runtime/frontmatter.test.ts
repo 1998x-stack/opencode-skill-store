@@ -19,6 +19,17 @@ describe("parseSkillMarkdown", () => {
       name: "Research", description: "A useful Skill", body: "# Research",
     })
   })
+  test("falls back when frontmatter name and description are blank", () => {
+    expect(parseSkillMarkdown(
+      ["---", 'name: "  "', 'description: ""', "---", "# Instructions"].join("\n"),
+      { name: "Store name", description: "Store description" },
+    )).toEqual({
+      name: "Store name",
+      description: "Store description",
+      autoinvoke: undefined,
+      body: "# Instructions",
+    })
+  })
   test("does not treat an arbitrary code fence as YAML frontmatter", () => {
     expect(parseSkillMarkdown("## Body\n---\nname: Fake\n---", { name: "Real", description: "Description" }).name).toBe("Real")
   })
