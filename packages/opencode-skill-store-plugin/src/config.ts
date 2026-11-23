@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { homedir } from "node:os"
 import path from "node:path"
-import type { Plugin } from "@opencode/plugin"
+import type { Plugin, PluginOptions } from "@opencode/plugin"
 
 export type StoreConfig = {
   baseUrl?: URL
