@@ -144,4 +144,10 @@ describe("extractSkillArchive", () => {
       await expect(extractSkillArchive(archive, dest, { ...limits, maxUnpackedBytes: 180 })).rejects.toThrow("size limit")
     })
   })
+
+  test("rejects an oversized root SKILL.md before parsing it", async () => {
+    await fixture([{ name: "SKILL.md", content: "x".repeat(40 * 1024) }], async (archive, dest) => {
+      await expect(extractSkillArchive(archive, dest, { ...limits, maxSkillFileBytes: 32 * 1024 })).rejects.toThrow("SKILL.md exceeds")
+    })
+  })
 })
