@@ -117,7 +117,7 @@ describe("StoreClient", () => {
   })
 
   test("reports HTTP errors without leaking credential values", async () => {
-    globalThis.fetch = (async () => new Response("unauthorized", { status: 401 })) as typeof fetch
+    globalThis.fetch = (async () => new Response("unauthorized", { status: 401 })) as unknown as typeof fetch
     const error = await new StoreClient(config).detail("private").catch((value) => value)
     expect(String(error)).toContain("HTTP 401")
     expect(String(error)).not.toContain("test-secret")
@@ -125,7 +125,7 @@ describe("StoreClient", () => {
 
   test("rejects empty asset IDs before making a request", async () => {
     let calls = 0
-    globalThis.fetch = (async () => { calls++; return Response.json({}) }) as typeof fetch
+    globalThis.fetch = (async () => { calls++; return Response.json({}) }) as unknown as typeof fetch
     await expect(new StoreClient(config).detail(" ")).rejects.toThrow("assetId is required")
     expect(calls).toBe(0)
   })
