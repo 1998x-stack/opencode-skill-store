@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs"
-import { mkdir, stat } from "node:fs/promises"
+import { lstat, mkdir, stat } from "node:fs/promises"
 import path from "node:path"
 import { Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
@@ -58,6 +58,9 @@ function openEntry(zip: ZipFile, entry: Entry): Promise<NodeJS.ReadableStream> {
 
 export async function extractSkillArchive(filename: string, destination: string, limits: ArchiveLimits) {
   await mkdir(destination, { recursive: true, mode: 0o700 })
+  const destinationInfo = await lstat(destination)
+  if (!destinationInfo.isDirectory() || destinationInfo.isSymbolicLink())
+    throw new Error("ZIP extraction destination must be a real directory, not a symbolic link")
   const zip = await openZip(filename)
   const names = new Set<string>()
   let entries = 0
