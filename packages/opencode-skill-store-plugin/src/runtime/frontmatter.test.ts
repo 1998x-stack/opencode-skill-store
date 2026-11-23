@@ -14,6 +14,20 @@ describe("parseSkillMarkdown", () => {
       body: "# Workflow\nRead sources before writing.",
     })
   })
+  test("maps disable-model-invocation to the inverse Runtime autoinvoke flag", () => {
+    const result = parseSkillMarkdown(
+      ["---", "name: Internal Workflow", "description: Only invoke when explicitly requested", "disable-model-invocation: true", "---", "# Internal workflow"].join("\n"),
+      { name: "Fallback", description: "Fallback description" },
+    )
+    expect(result.autoinvoke).toBe(false)
+  })
+  test("namespaced OpenCode autoinvoke metadata takes precedence over disable-model-invocation", () => {
+    const result = parseSkillMarkdown(
+      ["---", "name: Explicit Workflow", "description: Explicit precedence", "disable-model-invocation: true", "metadata:", "  opencode/autoinvoke: true", "---", "# Explicit workflow"].join("\n"),
+      { name: "Fallback", description: "Fallback description" },
+    )
+    expect(result.autoinvoke).toBe(true)
+  })
   test("uses Store metadata when the package has no frontmatter", () => {
     expect(parseSkillMarkdown("# Research", { name: "Research", description: "A useful Skill" })).toEqual({
       name: "Research", description: "A useful Skill", body: "# Research",
