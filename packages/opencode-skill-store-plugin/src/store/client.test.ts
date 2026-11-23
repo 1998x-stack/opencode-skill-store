@@ -13,6 +13,7 @@ const config: StoreConfig = {
   installRoot: "/tmp/skill-store-test",
   maxPackageBytes: 1024,
   maxUnpackedBytes: 2048,
+  maxSkillFileBytes: 1024,
   maxEntries: 20,
   maxCompressionRatio: 100,
 }
