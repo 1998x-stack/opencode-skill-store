@@ -1,0 +1,35 @@
+name: Skill Store Server Plugin CI
+
+on:
+  push:
+    branches: [skill-store-mvp]
+    paths:
+      - "packages/opencode-skill-store-plugin/**"
+      - ".github/workflows/plugin-ci.yml"
+  pull_request:
+    paths:
+      - "packages/opencode-skill-store-plugin/**"
+      - ".github/workflows/plugin-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/opencode-skill-store-plugin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - name: Install
+        run: bun install --frozen-lockfile=false
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Unit tests
+        run: bun test
