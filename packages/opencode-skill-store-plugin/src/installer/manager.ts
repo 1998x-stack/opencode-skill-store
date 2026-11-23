@@ -139,6 +139,8 @@ export class InstallManager {
   async close() {
     for (const controller of this.controllers.values()) controller.abort()
     await Promise.allSettled([...this.jobs.values()])
+    await this.mutationQueue
+    await Promise.all([this.installationWrite, this.operationWrite])
     this.controllers.clear()
     await this.skillRegistration?.dispose()
   }
@@ -193,7 +195,10 @@ export class InstallManager {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
         this.requireIdle(item.assetId)
-        item.pinnedVersion = typeof request.version === "string" ? request.version : null
+        const version = typeof request.version === "string" ? request.version.trim() : null
+        if (version && !/^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$/.test(version))
+          throw new Error("Pinned version has an unsafe identifier")
+        item.pinnedVersion = version
         await this.persistInstallations()
         return { item }
       }),
@@ -250,7 +255,7 @@ export class InstallManager {
     if (idempotencyKey) {
       const previous = this.operations.find((item) => item.idempotencyKey === idempotencyKey)
       if (previous) {
-        if (previous.assetId !== assetId || (requestedVersion && previous.version !== requestedVersion && previous.version !== "latest"))
+        if (previous.assetId !== assetId || (requestedVersion && previous.version !== requestedVersion))
           throw new Error("Idempotency key was already used for a different request")
         return { operationId: previous.operationId, state: previous.state }
       }
@@ -613,8 +618,12 @@ export class InstallManager {
   private async atomicJson(filename: string, value: unknown) {
     await mkdir(path.dirname(filename), { recursive: true, mode: 0o700 })
     const temporary = filename + "." + randomUUID() + ".tmp"
-    await writeFile(temporary, JSON.stringify(value, null, 2), { mode: 0o600 })
-    await rename(temporary, filename)
+    try {
+      await writeFile(temporary, JSON.stringify(value, null, 2), { mode: 0o600, flag: "wx" })
+      await rename(temporary, filename)
+    } finally {
+      await rm(temporary, { force: true }).catch(() => undefined)
+    }
   }
 
   private async persistInstallations() {
