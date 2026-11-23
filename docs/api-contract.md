@@ -94,7 +94,15 @@ Required metadata:
 
 Do not return a browser-facing signed URL. If the actual Store uses signed URLs internally, the server adapter must validate the allowed origin and keep the URL server-side.
 
-## 3. Authentication
+## 3. Transport and response limits
+
+- Store base URL must use HTTPS; plain HTTP is permitted only for loopback development endpoints (localhost, 127.0.0.1, ::1).
+- Configured API routes must be absolute paths on the configured Store origin; cross-origin routes and redirects are rejected.
+- JSON metadata responses are capped at 5 MiB.
+- Downloaded ZIP bytes are capped by maxPackageBytes; extracted content is capped by maxUnpackedBytes; root SKILL.md is separately capped by maxSkillFileBytes (2 MiB by default) before YAML parsing.
+- Install root, Location subdirectories and staging directories are private (0700); symlink directories are rejected.
+
+## 4. Authentication
 
 Defaults:
 - Header: Authorization
