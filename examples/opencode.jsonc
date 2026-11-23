@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "/absolute/path/to/opencode-skill-store/packages/opencode-skill-store-plugin",
+      "options": {
+        "storeBaseUrl": "https://skill-store.internal",
+        "installRoot": "/absolute/path/to/persistent/opencode-skill-store",
+        "maxPackageBytes": 104857600,
+        "maxUnpackedBytes": 314572800,
+        "maxEntries": 2000,
+        "maxCompressionRatio": 100
+      }
+    }
+  ]
+}

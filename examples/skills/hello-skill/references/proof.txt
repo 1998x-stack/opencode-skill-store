@@ -1,0 +1,1 @@
+SKILL_STORE_RUNTIME_PROOF=location-scoped-skill-loaded
