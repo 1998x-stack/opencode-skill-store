@@ -325,6 +325,19 @@ describe("InstallManager end-to-end without live Store", () => {
     } finally { await s.close() }
   })
 
+  test("pin metadata is restored in memory when persistence fails", async () => {
+    const s = await environment()
+    try {
+      const started = await s.api.installStart({ assetId: s.current.assetId, idempotencyKey: "pin-before" })
+      expect((await s.settle(started.operationId)).state).toBe("installed")
+      const item = (await s.api.installationList()).items[0]
+      s.current.failInstallationWrites = true
+      await expect(s.api.installationPin({ installationId: item.installationId, version: "1.0.0" }))
+        .rejects.toThrow("simulated installation storage failure")
+      expect((await s.api.installationList()).items[0].pinnedVersion).toBeNull()
+    } finally { await s.close() }
+  })
+
   test("rollback storage failure still leaves the operation terminal", async () => {
     const s = await environment()
     try {
