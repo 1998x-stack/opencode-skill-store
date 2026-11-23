@@ -36,7 +36,7 @@ function expandHome(value: string): string {
 
 function parseBaseUrl(value: string): URL {
   const url = new URL(value)
-  const host = url.hostname.replace(/^\\[|\\]$/g, "").toLowerCase()
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase()
   const loopback = host === "localhost" || host === "127.0.0.1" || host === "::1"
   if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))
     throw new Error("SKILL_STORE_BASE_URL must use HTTPS (HTTP is allowed only for localhost)")
