@@ -9,7 +9,8 @@ import type { Plugin } from "@opencode/plugin"
 import type { AssetDetail, Installation, Operation, PackageInfo } from "../contracts.js"
 import type { StoreConfig } from "../config.js"
 import { extractSkillArchive } from "./archive.js"
-import { atomicJson, JournalStore, type InstallJournal } from "./journal.js"
+import { atomicJson, JournalStore, LifecycleJournalStore, type InstallJournal, type LifecycleJournal } from "./journal.js"
+import { LocationLock } from "./location-lock.js"
 import { parseSkillMarkdown } from "../runtime/frontmatter.js"
 import { StoreClient } from "../store/client.js"
 
@@ -83,6 +84,12 @@ export class InstallManager {
   private emit?: Emit
   private skillRegistration?: { dispose: () => Promise<void> }
   private recoveryRequired = false
+  private writerLock?: LocationLock
+  private closing = false
+  private closeTask?: Promise<void>
+  private pendingStarts = new Set<Promise<unknown>>()
+
+  private get lifecycleJournal() { return new LifecycleJournalStore(this.config.installRoot) }
 
   private get journal() { return new JournalStore(this.config.installRoot) }
 
@@ -114,7 +121,22 @@ export class InstallManager {
   }
 
   async initialize() {
+    if (this.writerLock || this.closing) throw new Error("Skill Store manager is already initialized or closed")
     await ensurePrivateDirectory(this.config.installRoot)
+    this.writerLock = await LocationLock.acquire(this.config.installRoot)
+    try {
+      await this.initializeLocked()
+    } catch (error) {
+      try { await this.skillRegistration?.dispose() }
+      finally {
+        this.writerLock.release()
+        this.writerLock = undefined
+      }
+      throw error
+    }
+  }
+
+  private async initializeLocked() {
     await ensurePrivateDirectory(path.join(this.config.installRoot, "skills"))
     await ensurePrivateDirectory(path.join(this.config.installRoot, "staging"))
     this.installations = asArray<unknown>(await this.ctx.storage.get(this.storageKey("installations")))
@@ -148,7 +170,13 @@ export class InstallManager {
 
     // Recover the transaction before exposing any Skill transform or RPC.
     const pending = await this.journal.read()
+    const lifecycle = await this.lifecycleJournal.read()
+    if (pending && lifecycle) throw new Error("Conflicting pending Skill Store journals")
     const recovered = pending ? await this.restoreJournalProjection(pending) : undefined
+    if (lifecycle) {
+      const target = lifecycle.phase === "committed" ? lifecycle.candidate : lifecycle.previous
+      await this.projectLifecycle(target)
+    }
     for (const operation of this.operations) {
       if (operation.operationId === pending?.operationId) continue
       if (ACTIVE_STATES.has(operation.state)) {
@@ -181,9 +209,16 @@ export class InstallManager {
         await this.persistOperations()
         await this.journal.clear()
       } catch (error) {
-        await this.skillRegistration.dispose()
         throw error
       }
+    }
+    if (lifecycle) {
+      const target = lifecycle.phase === "committed" ? lifecycle.candidate : lifecycle.previous
+      await this.ctx.skill.reload()
+      await this.verifyRuntime(target.runtimeSkillId, target)
+      if (lifecycle.kind === "uninstall" && lifecycle.phase === "committed")
+        await this.finishUninstall(target)
+      await this.lifecycleJournal.clear()
     }
   }
 
@@ -225,13 +260,89 @@ export class InstallManager {
       throw new Error("RUNTIME_REGISTER_FAILED: Skill identity, version or content mismatch " + id)
   }
 
-  async close() {
-    for (const id of this.controllers.keys()) this.cancelOperation(id)
-    await Promise.allSettled([...this.jobs.values()])
-    await this.mutationQueue
-    await Promise.all([this.installationWrite, this.operationWrite])
-    this.controllers.clear()
-    await this.skillRegistration?.dispose()
+  close(): Promise<void> {
+    if (this.closeTask) return this.closeTask
+    this.closing = true
+    this.closeTask = this.closeLocked()
+    return this.closeTask
+  }
+
+  private async closeLocked() {
+    try {
+      await Promise.allSettled([...this.pendingStarts])
+      for (const id of this.controllers.keys()) this.cancelOperation(id)
+      await Promise.allSettled([...this.jobs.values()])
+      await this.mutationQueue
+      await Promise.all([this.installationWrite, this.operationWrite])
+      this.controllers.clear()
+      await this.skillRegistration?.dispose()
+    } finally {
+      this.writerLock?.release()
+      this.writerLock = undefined
+    }
+  }
+
+  private trackStart(input: InstallRequest) {
+    const request = this.start(input)
+    this.pendingStarts.add(request)
+    return request.finally(() => this.pendingStarts.delete(request))
+  }
+
+  private async projectLifecycle(item: Installation) {
+    if (item.runtimeSkillId !== runtimeID(item.assetId))
+      throw new Error("Skill Store lifecycle journal identity mismatch")
+    this.installations = [
+      ...this.installations.filter((entry) => entry.assetId !== item.assetId),
+      structuredClone(item),
+    ]
+    await this.persistInstallations()
+  }
+
+  private async finishUninstall(item: Installation) {
+    // Never delete until the committed tombstone is durable and Runtime is absent.
+    await this.removeManagedDirectory(item.runtimeSkillId, item.assetId)
+    this.installations = this.installations.filter((entry) => entry.assetId !== item.assetId)
+    try {
+      await this.persistInstallations()
+    } catch (error) {
+      // Files may already be gone; retain the tombstone, never reactivate.
+      this.installations.push(structuredClone(item))
+      throw error
+    }
+  }
+
+  private async changeLifecycle(kind: LifecycleJournal["kind"], previous: Installation, candidate: Installation) {
+    const prepared: LifecycleJournal = {
+      schemaVersion: 1, kind, phase: "prepared",
+      previous: structuredClone(previous), candidate: structuredClone(candidate),
+    }
+    await this.lifecycleJournal.write(prepared)
+    let committed = false
+    try {
+      await this.projectLifecycle(candidate)
+      await this.refreshRuntime()
+      await this.verifyRuntime(candidate.runtimeSkillId, candidate)
+      await this.lifecycleJournal.write({ ...prepared, phase: "committed" })
+      committed = true
+      if (kind === "uninstall") await this.finishUninstall(candidate)
+      await this.lifecycleJournal.clear()
+    } catch (error) {
+      if (committed) {
+        // Do not undo the tombstone or a committed toggle after irreversible cleanup.
+        this.recoveryRequired = true
+        throw new Error("Skill Store lifecycle committed; restart required to finish recovery", { cause: error })
+      }
+      try {
+        await this.projectLifecycle(prepared.previous)
+        await this.refreshRuntime()
+        await this.verifyRuntime(previous.runtimeSkillId, previous)
+        await this.lifecycleJournal.clear()
+      } catch (rollbackError) {
+        this.recoveryRequired = true
+        throw new AggregateError([error, rollbackError], "Skill Store lifecycle rollback failed; restart required")
+      }
+      throw error
+    }
   }
 
   handlers() {
@@ -250,7 +361,7 @@ export class InstallManager {
       },
       installationList: async () => ({ items: this.installations }),
       operationList: async () => ({ items: this.operations.slice(-30).reverse() }),
-      installStart: async (input: unknown) => this.start(input as InstallRequest),
+      installStart: async (input: unknown) => this.trackStart(input as InstallRequest),
       operationGet: async (input: unknown) => {
         const id = String(asRecord(input).operationId ?? "")
         return { operation: this.operations.find((item) => item.operationId === id) ?? null }
@@ -263,19 +374,12 @@ export class InstallManager {
         const request = asRecord(input)
         const item = this.requireInstallation(String(request.installationId ?? ""))
         this.requireIdle(item.assetId)
-        const previous = item.enabled
-        item.enabled = request.enabled === true
-        try {
-          await this.persistInstallations()
-          await this.refreshRuntime()
-        } catch (error) {
-          item.enabled = previous
-          await this.persistInstallations()
-          await this.refreshRuntime().catch(() => undefined)
-          throw error
-        }
-        await this.publishInstallation(item, item.enabled ? "enabled" : "disabled")
-        return { item }
+        if (item.status === "cleanup_pending") throw new Error("Skill Store uninstall cleanup is pending")
+        const candidate = { ...item, enabled: request.enabled === true }
+        await this.changeLifecycle("set_enabled", item, candidate)
+        const updated = this.requireInstallation(item.installationId)
+        await this.publishInstallation(updated, updated.enabled ? "enabled" : "disabled")
+        return { item: updated }
       }),
       installationPin: async (input: unknown) => this.withMutation(async () => {
         const request = asRecord(input)
@@ -299,18 +403,8 @@ export class InstallManager {
         const id = String(asRecord(input).installationId ?? "")
         const item = this.requireInstallation(id)
         this.requireIdle(item.assetId)
-        const previous = this.installations
-        this.installations = previous.filter((entry) => entry.installationId !== id)
-        try {
-          await this.persistInstallations()
-          await this.refreshRuntime()
-          await this.removeManagedDirectory(item.runtimeSkillId, item.assetId)
-        } catch (error) {
-          this.installations = previous
-          await this.persistInstallations()
-          await this.refreshRuntime().catch(() => undefined)
-          throw error
-        }
+        const candidate: Installation = { ...item, enabled: false, status: "cleanup_pending" }
+        await this.changeLifecycle("uninstall", item, candidate)
         await this.publishInstallation(item, "uninstalled")
         return { removed: true }
       }),
@@ -346,6 +440,7 @@ export class InstallManager {
   }
 
   private async start(input: InstallRequest) {
+    if (this.closing || !this.writerLock) throw new Error("Skill Store manager is not accepting mutations")
     if (this.recoveryRequired) throw new Error("Skill Store transaction recovery requires a Server restart")
     const assetId = typeof input.assetId === "string" ? input.assetId.trim() : ""
     const requestedVersion = typeof input.version === "string" ? input.version.trim() : undefined
@@ -756,6 +851,7 @@ export class InstallManager {
   }
 
   private requireIdle(assetId: string) {
+    if (this.closing || !this.writerLock) throw new Error("Skill Store manager is not accepting mutations")
     if (this.recoveryRequired) throw new Error("Skill Store transaction recovery requires a Server restart")
     if (this.activeByAsset.has(assetId)) throw new Error("A Skill installation or update is already in progress")
   }
@@ -773,6 +869,8 @@ export class InstallManager {
     const relative = path.relative(root, target)
     if (!relative || relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative))
       throw new Error("Refusing to remove a path outside the managed Skill directory")
+    await assertDirectoryIfExists(root)
+    await assertDirectoryIfExists(target)
     await rm(target, { recursive: true, force: true })
   }
 
