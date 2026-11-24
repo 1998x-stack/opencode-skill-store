@@ -116,6 +116,7 @@ export async function environment(options: EnvironmentOptions = {}) {
   const runtime: { id: string; name: string; description?: string; content: string; path: string }[] = []
   let transform: (editor: { add: (skill: typeof runtime[number]) => void }) => void = () => {}
 
+  const hooks: { beforeStorageWrite?: (key: string, value: unknown) => Promise<void>; afterReload?: () => Promise<void> } = {}
   const editor = {
     add(skill: typeof runtime[number]) { runtime.push(skill) },
   }
@@ -124,6 +125,7 @@ export async function environment(options: EnvironmentOptions = {}) {
     storage: {
       get: async (key: string) => structuredClone(data.get(key)),
       set: async (key: string, value: unknown) => {
+        await hooks.beforeStorageWrite?.(key, value)
         if (key.endsWith(":installations") && current.failInstallationWrites) throw new Error("simulated installation storage failure")
         const update = key.endsWith(":installations") &&
           Array.isArray(value) && (value as Installation[]).some((item) => item.version === "1.1.0")
@@ -145,6 +147,7 @@ export async function environment(options: EnvironmentOptions = {}) {
       reload: async () => {
         runtime.length = 0
         transform(editor)
+        await hooks.afterReload?.()
         if (runtime.some((item) => item.content.includes("# Proof 1.1.0"))) await crash("runtime")
         if (current.failReload) {
           current.failReload = false
@@ -222,7 +225,7 @@ export async function environment(options: EnvironmentOptions = {}) {
     throw new Error("Install operation did not reach a terminal state")
   }
   return {
-    manager, api, settle, runtime, current, config, root, ctx, store, data,
+    manager, api, settle, runtime, current, config, root, ctx, store, data, hooks,
     close: async () => { await manager.close(); await rm(root, { recursive: true, force: true }) },
   }
 }
