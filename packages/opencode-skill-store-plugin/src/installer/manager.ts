@@ -9,6 +9,7 @@ import type { Plugin } from "@opencode/plugin"
 import type { AssetDetail, Installation, Operation, PackageInfo } from "../contracts.js"
 import type { StoreConfig } from "../config.js"
 import { extractSkillArchive } from "./archive.js"
+import { atomicJson, JournalStore, type InstallJournal } from "./journal.js"
 import { parseSkillMarkdown } from "../runtime/frontmatter.js"
 import { StoreClient } from "../store/client.js"
 
@@ -81,6 +82,9 @@ export class InstallManager {
   private operationWrite: Promise<void> = Promise.resolve()
   private emit?: Emit
   private skillRegistration?: { dispose: () => Promise<void> }
+  private recoveryRequired = false
+
+  private get journal() { return new JournalStore(this.config.installRoot) }
 
   /** Return a durable key isolated to this plugin instance's OpenCode Location. */
   private storageKey(key: string) {
@@ -142,7 +146,11 @@ export class InstallManager {
       )
       .map((item) => ({ ...item, idempotencyKey: typeof item.idempotencyKey === "string" ? item.idempotencyKey : null })) as Operation[]
 
+    // Recover the transaction before exposing any Skill transform or RPC.
+    const pending = await this.journal.read()
+    const recovered = pending ? await this.restoreJournalProjection(pending) : undefined
     for (const operation of this.operations) {
+      if (operation.operationId === pending?.operationId) continue
       if (ACTIVE_STATES.has(operation.state)) {
         operation.state = "interrupted"
         operation.stage = "recovery"
@@ -158,6 +166,63 @@ export class InstallManager {
     this.skillRegistration = await this.ctx.skill.transform((editor) => {
       for (const item of this.snapshot) editor.add(item)
     })
+    if (pending) {
+      try {
+        await this.ctx.skill.reload()
+        await this.verifyRuntime(pending.candidate.runtimeSkillId, recovered)
+        const operation = this.operations.find((entry) => entry.operationId === pending.operationId)!
+        const committed = pending.phase === "committed"
+        operation.state = committed ? "installed" : "interrupted"
+        operation.stage = committed ? "installed" : "recovery"
+        if (committed) operation.progress = 100
+        operation.message = committed ? "Recovered committed installation" : "Rolled back interrupted installation"
+        operation.error = null
+        operation.updatedAt = now()
+        await this.persistOperations()
+        await this.journal.clear()
+      } catch (error) {
+        await this.skillRegistration.dispose()
+        throw error
+      }
+    }
+  }
+
+  /** The journal is authoritative only while a transaction is pending.
+   * Outside a transaction, the Location KV installation record is authoritative.
+   */
+  private async restoreJournalProjection(journal: InstallJournal) {
+    const candidate = journal.candidate
+    const operation = this.operations.find((entry) => entry.operationId === journal.operationId)
+    if (candidate.runtimeSkillId !== runtimeID(candidate.assetId) ||
+        !operation || operation.assetId !== candidate.assetId || operation.version !== candidate.version)
+      throw new Error("Skill Store journal identity does not match the operation")
+    const target = journal.phase === "committed" ? candidate : journal.previous
+    const skillRoot = path.join(this.config.installRoot, "skills", candidate.runtimeSkillId)
+    await ensurePrivateDirectory(skillRoot)
+    const activeFile = path.join(skillRoot, "active.json")
+    if (target) {
+      await this.atomicJson(activeFile, { version: target.version, sha256: target.sha256, updatedAt: now() })
+    } else {
+      await rm(activeFile, { force: true })
+    }
+    this.installations = this.installations.filter((entry) => entry.assetId !== candidate.assetId)
+    if (target) this.installations.push(structuredClone(target))
+    await this.persistInstallations()
+    return target ?? undefined
+  }
+
+  private async verifyRuntime(id: string, target?: Installation, expectedBody?: string) {
+    const actual = (await this.ctx.skill.list()).data.filter((skill) => skill.id === id)
+    if (!target || !target.enabled) {
+      if (actual.length) throw new Error("RUNTIME_REGISTER_FAILED: unexpected active Skill " + id)
+      return
+    }
+    const snapshot = this.snapshot.find((skill) => skill.id === id)
+    const expectedPath = path.join(await realpath(this.config.installRoot), "skills", id, "versions", target.version, "SKILL.md")
+    if (!snapshot || snapshot.path !== expectedPath || actual.length !== 1 ||
+        actual[0].path !== expectedPath || actual[0].content !== snapshot.content ||
+        (expectedBody !== undefined && snapshot.content !== expectedBody))
+      throw new Error("RUNTIME_REGISTER_FAILED: Skill identity, version or content mismatch " + id)
   }
 
   async close() {
@@ -281,6 +346,7 @@ export class InstallManager {
   }
 
   private async start(input: InstallRequest) {
+    if (this.recoveryRequired) throw new Error("Skill Store transaction recovery requires a Server restart")
     const assetId = typeof input.assetId === "string" ? input.assetId.trim() : ""
     const requestedVersion = typeof input.version === "string" ? input.version.trim() : undefined
     const idempotencyKey = typeof input.idempotencyKey === "string" ? input.idempotencyKey.trim() : undefined
@@ -359,8 +425,11 @@ export class InstallManager {
     let activeChanged = false
     let createdVersion = false
     let committedVersionRoot: string | undefined
+    let journal: InstallJournal | undefined
+    let committed = false
 
     try {
+      if (this.recoveryRequired) throw new Error("Skill Store transaction recovery requires a Server restart")
       signal.throwIfAborted()
       await ensurePrivateDirectory(stageRoot)
       await this.progress(operation, "resolving", 5, "Resolving asset and package metadata")
@@ -442,9 +511,6 @@ export class InstallManager {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
       }
-      await this.atomicJson(activeFile, { version: selected.version, sha256: downloaded.sha256, updatedAt: now() })
-      activeChanged = true
-
       const item: Installation = {
         installationId: previous?.installationId ?? "ins_" + digest(operation.assetId).slice(0, 16),
         assetId: operation.assetId,
@@ -458,17 +524,39 @@ export class InstallManager {
         installedAt: previous?.installedAt ?? now(),
         status: "installed",
       }
+      // Before-image is durable before either projection is changed.
+      const prepared: InstallJournal = {
+        schemaVersion: 1, operationId: operation.operationId, phase: "prepared",
+        previous: previous ? structuredClone(previous) : null, candidate: structuredClone(item),
+      }
+      await this.journal.write(prepared)
+      journal = prepared
+      await this.atomicJson(activeFile, { version: selected.version, sha256: downloaded.sha256, updatedAt: now() })
+      activeChanged = true
       this.installations = [...this.installations.filter((entry) => entry.assetId !== item.assetId), item]
       await this.persistInstallations()
 
       await this.progress(operation, "registering", 90, "Registering Skill in OpenCode Runtime")
       await this.refreshRuntime()
-      const registered = (await this.ctx.skill.list()).data.some((skill) => skill.id === id)
-      if (item.enabled && !registered) throw new Error("RUNTIME_REGISTER_FAILED: Skill Runtime did not expose " + id)
+      await this.verifyRuntime(id, item, parsed.body)
 
+      // No rollback after this durable commit marker, even if publishing the
+      // operation result fails. Startup will finish the committed projection.
+      await this.journal.write({ ...prepared, phase: "committed" })
+      committed = true
       await this.progress(operation, "installed", 100, "Skill installed and verified in Runtime", "installed")
+      await this.journal.clear()
       await this.publishInstallation(item, "installed")
     } catch (error) {
+      if (committed) {
+        this.recoveryRequired = true
+        operation.state = "installed"
+        operation.stage = "installed"
+        operation.progress = 100
+        operation.message = "Installation committed; operation recovery requires a Server restart"
+        operation.updatedAt = now()
+        return
+      }
       const rollbackErrors: string[] = []
       if (activeChanged) {
         const activeFile = path.join(this.config.installRoot, "skills", runtimeID(operation.assetId), "active.json")
@@ -497,7 +585,7 @@ export class InstallManager {
             }
           }
         }
-        if (createdVersion && committedVersionRoot) {
+        if (createdVersion && committedVersionRoot && rollbackErrors.length === 0) {
           try { await rm(committedVersionRoot, { recursive: true, force: true }) }
           catch (rollbackError) { rollbackErrors.push("new version cleanup failed: " + errorMessage(rollbackError)) }
         }
@@ -513,7 +601,10 @@ export class InstallManager {
       const terminalError = [originalError, ...rollbackErrors].filter(Boolean).join(" | ")
       try {
         await this.progress(operation, "terminal", operation.progress, terminalMessage, terminalState, terminalError)
+        if (journal && rollbackErrors.length === 0) await this.journal.clear()
+        else if (journal) this.recoveryRequired = true
       } catch (persistError) {
+        if (journal) this.recoveryRequired = true
         // Keep the in-memory state terminal even if durable storage is temporarily unavailable.
         operation.stage = "terminal"
         operation.state = terminalState
@@ -665,6 +756,7 @@ export class InstallManager {
   }
 
   private requireIdle(assetId: string) {
+    if (this.recoveryRequired) throw new Error("Skill Store transaction recovery requires a Server restart")
     if (this.activeByAsset.has(assetId)) throw new Error("A Skill installation or update is already in progress")
   }
 
@@ -686,13 +778,7 @@ export class InstallManager {
 
   private async atomicJson(filename: string, value: unknown) {
     await mkdir(path.dirname(filename), { recursive: true, mode: 0o700 })
-    const temporary = filename + "." + randomUUID() + ".tmp"
-    try {
-      await writeFile(temporary, JSON.stringify(value, null, 2), { mode: 0o600, flag: "wx" })
-      await rename(temporary, filename)
-    } finally {
-      await rm(temporary, { force: true }).catch(() => undefined)
-    }
+    await atomicJson(filename, value)
   }
 
   private async persistInstallations() {
@@ -703,7 +789,9 @@ export class InstallManager {
   }
 
   private async persistOperations() {
-    this.operations = this.operations.slice(-100)
+    // Never evict an in-flight operation (including one referenced by a journal).
+    const recent = new Set(this.operations.filter((item) => !ACTIVE_STATES.has(item.state)).slice(-100))
+    this.operations = this.operations.filter((item) => ACTIVE_STATES.has(item.state) || recent.has(item))
     const snapshot = structuredClone(this.operations)
     const write = this.operationWrite.then(() => this.ctx.storage.set(this.storageKey("operations"), snapshot))
     this.operationWrite = write.catch(() => undefined)
