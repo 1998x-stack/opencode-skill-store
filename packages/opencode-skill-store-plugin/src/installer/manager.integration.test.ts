@@ -408,6 +408,47 @@ describe("InstallManager end-to-end without live Store", () => {
     } finally { await s.close() }
   })
 
+  test("accepts cancellation before commit without activating the package", async () => {
+    const s = await environment()
+    const cancellationResults: boolean[] = []
+    try {
+      s.manager.setEmitter(async (name, data) => {
+        if (name !== "operationProgress" || data.stage !== "extracting") return
+        const result = await s.api.operationCancel({ operationId: data.operationId })
+        cancellationResults.push(result.cancelled)
+      })
+      const started = await s.api.installStart({
+        assetId: s.current.assetId, idempotencyKey: "cancel-before-commit",
+      })
+      const operation = await s.settle(started.operationId)
+      expect(cancellationResults).toEqual([true])
+      expect(operation.state).toBe("cancelled")
+      expect((await s.api.installationList()).items).toHaveLength(0)
+      expect(s.runtime).toHaveLength(0)
+    } finally { await s.close() }
+  })
+
+  test("rejects cancellation during commit and registration", async () => {
+    const s = await environment()
+    const cancellationResults: boolean[] = []
+    try {
+      s.manager.setEmitter(async (name, data) => {
+        if (name !== "operationProgress" || !["committing", "registering"].includes(String(data.stage))) return
+        const result = await s.api.operationCancel({ operationId: data.operationId })
+        cancellationResults.push(result.cancelled)
+      })
+      const started = await s.api.installStart({
+        assetId: s.current.assetId, idempotencyKey: "cancel-after-commit",
+      })
+      const operation = await s.settle(started.operationId)
+      expect(cancellationResults).toEqual([false, false])
+      expect(operation.state).toBe("installed")
+      expect((await s.api.installationList()).items).toHaveLength(1)
+      expect(s.runtime).toHaveLength(1)
+      expect(await s.api.operationCancel({ operationId: started.operationId })).toEqual({ cancelled: false })
+    } finally { await s.close() }
+  })
+
   test("enable, disable and uninstall update the native Runtime and filesystem", async () => {
     const s = await environment()
     try {
