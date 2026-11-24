@@ -12,12 +12,17 @@ export default Plugin.define({
     const manager = new InstallManager(ctx, store, config)
 
     await manager.initialize()
-    const registration = await ctx.rpc.register(SkillStoreRPC, manager.handlers())
-    manager.setEmitter((name, data) => registration.events.emit(name, data as never))
+    try {
+      const registration = await ctx.rpc.register(SkillStoreRPC, manager.handlers())
+      manager.setEmitter((name, data) => registration.events.emit(name, data as never))
 
-    return async () => {
-      await registration.dispose()
+      return async () => {
+        try { await registration.dispose() }
+        finally { await manager.close() }
+      }
+    } catch (error) {
       await manager.close()
+      throw error
     }
   },
 })
