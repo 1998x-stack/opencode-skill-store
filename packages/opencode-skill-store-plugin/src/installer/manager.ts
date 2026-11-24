@@ -161,7 +161,7 @@ export class InstallManager {
   }
 
   async close() {
-    for (const controller of this.controllers.values()) controller.abort()
+    for (const id of this.controllers.keys()) this.cancelOperation(id)
     await Promise.allSettled([...this.jobs.values()])
     await this.mutationQueue
     await Promise.all([this.installationWrite, this.operationWrite])
@@ -192,10 +192,7 @@ export class InstallManager {
       },
       operationCancel: async (input: unknown) => {
         const id = String(asRecord(input).operationId ?? "")
-        const controller = this.controllers.get(id)
-        if (!controller) return { cancelled: false }
-        controller.abort()
-        return { cancelled: true }
+        return { cancelled: this.cancelOperation(id) }
       },
       installationSetEnabled: async (input: unknown) => this.withMutation(async () => {
         const request = asRecord(input)
@@ -270,6 +267,17 @@ export class InstallManager {
         return { updates }
       },
     }
+  }
+
+  // Once commit starts, the transaction must finish or roll back; cancellation
+  // cannot truthfully be acknowledged at that point. Shutdown uses the same gate.
+  private cancelOperation(id: string): boolean {
+    const operation = this.operations.find((item) => item.operationId === id)
+    const controller = this.controllers.get(id)
+    if (!operation || !controller || !ACTIVE_STATES.has(operation.state)) return false
+    if (operation.stage === "committing" || operation.stage === "registering") return false
+    controller.abort()
+    return true
   }
 
   private async start(input: InstallRequest) {
@@ -394,6 +402,9 @@ export class InstallManager {
       const parsed = parseSkillMarkdown(markdown, { name: detail.asset.title, description: detail.asset.description })
       if (!parsed.description.trim()) throw new Error("SKILL.md must provide a description or inherit one from Store metadata")
 
+      // Parsing awaited filesystem I/O after the previous abort check. Check
+      // again immediately before progress synchronously enters the commit stage.
+      signal.throwIfAborted()
       await this.progress(operation, "committing", 75, "Committing immutable version directory")
       const skillRoot = path.join(this.config.installRoot, "skills", id)
       const versionsRoot = path.join(skillRoot, "versions")
