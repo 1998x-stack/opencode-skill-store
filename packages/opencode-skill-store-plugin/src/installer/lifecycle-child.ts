@@ -28,19 +28,10 @@ if (kind === "lock") {
     await originalWrite.call(this, journal)
     if (point === "committed" && journal.phase === "committed") await crash()
   }
-  if (point === "prepared-runtime") {
-    const reload = s.ctx.skill.reload.bind(s.ctx.skill)
-    s.ctx.skill.reload = async () => {
-      const result = await reload()
-      await crash()
-      return result
-    }
-  }
+  if (point === "prepared-runtime") s.hooks.afterReload = crash
   if (point === "after-delete") {
-    const persist = s.ctx.storage.set.bind(s.ctx.storage)
-    s.ctx.storage.set = async (key, value) => {
+    s.hooks.beforeStorageWrite = async (key, value) => {
       if (key.endsWith(":installations") && Array.isArray(value) && value.length === 0) await crash()
-      return persist(key, value)
     }
   }
   if (kind === "uninstall") await s.api.installationUninstall({ installationId: item.installationId })
