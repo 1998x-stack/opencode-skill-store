@@ -3,6 +3,8 @@ import { lstat, open, readFile, rename, rm } from "node:fs/promises"
 import path from "node:path"
 import type { Installation } from "../contracts.js"
 
+const MAX_JOURNAL_BYTES = 1024 * 1024
+
 export type InstallJournal = {
   schemaVersion: 1
   operationId: string
@@ -53,7 +55,7 @@ export class JournalStore {
   async read(): Promise<InstallJournal | null> {
     try {
       const info = await lstat(this.filename)
-      if (!info.isFile() || info.isSymbolicLink() || info.size > 1024 * 1024)
+      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_JOURNAL_BYTES)
         throw new Error("Invalid Skill Store transaction journal file")
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
@@ -73,6 +75,8 @@ export class JournalStore {
   }
 
   async write(value: InstallJournal): Promise<void> {
+    if (Buffer.byteLength(JSON.stringify(value, null, 2)) > MAX_JOURNAL_BYTES)
+      throw new Error("Skill Store transaction journal exceeds its size limit")
     await atomicJson(this.filename, value)
   }
 
