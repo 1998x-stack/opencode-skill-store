@@ -84,3 +84,55 @@ export class JournalStore {
     await rm(this.filename, { force: true })
   }
 }
+
+
+export type LifecycleJournal = {
+  schemaVersion: 1
+  kind: "set_enabled" | "uninstall"
+  phase: "prepared" | "committed"
+  previous: Installation
+  candidate: Installation
+}
+
+/** Separate from the v1 install journal to preserve recovery compatibility. */
+export class LifecycleJournalStore {
+  private readonly filename: string
+
+  constructor(root: string) {
+    this.filename = path.join(root, "lifecycle-journal.json")
+  }
+
+  async read(): Promise<LifecycleJournal | null> {
+    try {
+      const info = await lstat(this.filename)
+      if (!info.isFile() || info.isSymbolicLink() || info.size > MAX_JOURNAL_BYTES)
+        throw new Error("Invalid Skill Store lifecycle journal file")
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
+      throw error
+    }
+    const row = JSON.parse(await readFile(this.filename, "utf8")) as Partial<LifecycleJournal> | null
+    if (!row || row.schemaVersion !== 1 ||
+        (row.kind !== "set_enabled" && row.kind !== "uninstall") ||
+        (row.phase !== "prepared" && row.phase !== "committed") ||
+        !validInstallation(row.previous) || !validInstallation(row.candidate))
+      throw new Error("Invalid Skill Store lifecycle journal contents")
+    const expected = { ...row.previous, enabled: row.candidate.enabled,
+      status: row.kind === "uninstall" ? "cleanup_pending" : row.previous.status }
+    if (Object.keys(expected).some((key) =>
+      expected[key as keyof Installation] !== row.candidate![key as keyof Installation]) ||
+      (row.kind === "uninstall" && row.candidate.enabled))
+      throw new Error("Invalid Skill Store lifecycle journal transition")
+    return row as LifecycleJournal
+  }
+
+  async write(value: LifecycleJournal): Promise<void> {
+    if (Buffer.byteLength(JSON.stringify(value, null, 2)) > MAX_JOURNAL_BYTES)
+      throw new Error("Skill Store lifecycle journal exceeds its size limit")
+    await atomicJson(this.filename, value)
+  }
+
+  async clear(): Promise<void> {
+    await rm(this.filename, { force: true })
+  }
+}
